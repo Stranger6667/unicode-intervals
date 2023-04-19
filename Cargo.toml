@@ -1,0 +1,35 @@
+[package]
+name = "unicode-intervals"
+version = "0.1.0"
+authors = ["Dmitry Dygalo <dadygalo@gmail.com>"]
+edition = "2021"
+documentation = "https://github.com/Stranger6667/unicode-intervals"
+homepage = "https://github.com/Stranger6667/unicode-intervals"
+repository = "https://github.com/Stranger6667/unicode-intervals"
+license = "MIT OR Apache-2.0"
+keywords = ["unicode", "codepoint", "interval"]
+categories = ["text-processing", "internationalization"]
+description = """
+Search for Unicode code points intervals by including/excluding categories,
+ranges, and custom characters sets.
+"""
+readme = "README.md"
+include = ["src/**/*", "README.md"]
+
+[dependencies]
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = "debuginfo"
+
+[dev-dependencies]
+criterion = "0.4.0"
+test-case = "3.1.0"
+
+[features]
+__benchmark_internals = []
+
+[[bench]]
+name = "bench"
+harness = false
