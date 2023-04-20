@@ -412,6 +412,25 @@ mod tests {
         assert_eq!(intervals, &[(97, 99)]);
     }
 
+    #[test]
+    fn test_query_include_category_and_characters() {
+        let intervals = UnicodeVersion::V15_0_0
+            .query(UnicodeCategory::Pc, None, None, None, "abc", None)
+            .expect("Invalid query");
+        assert_eq!(
+            intervals,
+            &[
+                (95, 95),
+                (97, 99),
+                (8255, 8256),
+                (8276, 8276),
+                (65075, 65076),
+                (65101, 65103),
+                (65343, 65343)
+            ]
+        );
+    }
+
     #[test_case(
         1073741824,
         2147483648,
