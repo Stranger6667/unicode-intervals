@@ -39,8 +39,6 @@ assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 `IntervalSet` for index-like access to the underlying codepoints:
 
 ```rust
-use unicode_intervals::UnicodeCategory;
-
 let interval_set = unicode_intervals::query()
     .max_codepoint(128)
     .interval_set()
@@ -77,6 +75,8 @@ assert_eq!(intervals, &[(65, 128)])
 Include or exclude specific characters:
 
 ```rust
+use unicode_intervals::UnicodeCategory;
+
 let intervals = unicode_intervals::query()
     .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
     .include_characters("-123")
