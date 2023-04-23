@@ -29,9 +29,15 @@ fn intervals(c: &mut Criterion) {
 
 fn categories(c: &mut Criterion) {
     let all_categories = black_box(UnicodeCategorySet::all());
-    c.bench_function("categories - set - display", |b| {
+    c.bench_function("categories - set - display - all", |b| {
         b.iter(|| {
             let _ = all_categories.to_string();
+        })
+    });
+    let few_categories = UnicodeCategory::Lm | UnicodeCategory::Sk | UnicodeCategory::Zl;
+    c.bench_function("categories - set - display - few", |b| {
+        b.iter(|| {
+            let _ = few_categories.to_string();
         })
     });
     c.bench_function("categories - merge", |b| {

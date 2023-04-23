@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Reduce the size of the struct returned by `UnicodeCategorySet.iter()` from 8 to 4 bytes and improve performance for
+  cases when a few Unicode categories are involved.
+
 ## [0.1.2] - 2023-04-23
 
 - Support `DoubleEndedIterator` for `IntervalSet.iter()`.

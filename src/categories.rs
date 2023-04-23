@@ -304,16 +304,19 @@ impl UnicodeCategorySet {
     #[inline]
     #[must_use]
     pub const fn iter(self) -> Iter {
-        Iter {
-            index: 0,
-            data: self,
-        }
+        Iter { data: self }
     }
     // `index` is always < 30 and can't overflow
     #[inline]
     #[allow(clippy::integer_arithmetic)]
     pub(crate) fn set(&mut self, index: u8) {
         self.0 |= 1 << index;
+    }
+    // `index` is always < 30 and can't overflow
+    #[inline]
+    #[allow(clippy::integer_arithmetic)]
+    pub(crate) fn unset(&mut self, index: u8) {
+        self.0 &= !(1 << index);
     }
     // `index`` is always < 30 and can't overflow
     #[inline]
@@ -334,9 +337,10 @@ impl fmt::Display for UnicodeCategorySet {
     // `idx` can't overflow as the maximum possible size of `iter` is 30 < usize::MAX
     #[allow(clippy::integer_arithmetic)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let len = self.len();
         for (idx, category) in self.iter().enumerate() {
             f.write_str(category.as_str())?;
-            if idx + 1 != self.len() {
+            if idx + 1 != len {
                 f.write_str(", ")?;
             }
         }
@@ -400,59 +404,51 @@ impl BitOrAssign<UnicodeCategory> for UnicodeCategorySet {
 
 #[derive(Debug)]
 pub struct Iter {
-    index: u8,
     data: UnicodeCategorySet,
 }
 
 impl Iterator for Iter {
     type Item = UnicodeCategory;
 
-    // `self.index` can't be greater than 30 as checked in the beginning of the function
-    #[allow(clippy::integer_arithmetic)]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.index >= 30 {
-                return None;
-            }
-            if self.data.is_set(self.index) {
-                let category = match self.index {
-                    0 => Pe,
-                    1 => Pc,
-                    2 => Cc,
-                    3 => Sc,
-                    4 => Pd,
-                    5 => Nd,
-                    6 => Me,
-                    7 => Pf,
-                    8 => Cf,
-                    9 => Pi,
-                    10 => Nl,
-                    11 => Zl,
-                    12 => Ll,
-                    13 => Sm,
-                    14 => Lm,
-                    15 => Sk,
-                    16 => Mn,
-                    17 => Ps,
-                    18 => Lo,
-                    19 => No,
-                    20 => Po,
-                    21 => So,
-                    22 => Zp,
-                    23 => Co,
-                    24 => Zs,
-                    25 => Mc,
-                    26 => Cs,
-                    27 => Lt,
-                    28 => Cn,
-                    29 => Lu,
-                    _ => unreachable!("The index can't be >= 30 as checked above"),
-                };
-                self.index += 1;
-                return Some(category);
-            };
-            self.index += 1;
-        }
+        // INVARIANT: The number of trailing zeros for `u32` is 32 at most which is less than `u8::MAX`
+        #[allow(clippy::cast_possible_truncation)]
+        let index = self.data.0.trailing_zeros() as u8;
+        let category = match index {
+            0 => Pe,
+            1 => Pc,
+            2 => Cc,
+            3 => Sc,
+            4 => Pd,
+            5 => Nd,
+            6 => Me,
+            7 => Pf,
+            8 => Cf,
+            9 => Pi,
+            10 => Nl,
+            11 => Zl,
+            12 => Ll,
+            13 => Sm,
+            14 => Lm,
+            15 => Sk,
+            16 => Mn,
+            17 => Ps,
+            18 => Lo,
+            19 => No,
+            20 => Po,
+            21 => So,
+            22 => Zp,
+            23 => Co,
+            24 => Zs,
+            25 => Mc,
+            26 => Cs,
+            27 => Lt,
+            28 => Cn,
+            29 => Lu,
+            _ => return None,
+        };
+        self.data.unset(index);
+        Some(category)
     }
 }
 
