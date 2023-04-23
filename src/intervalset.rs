@@ -34,8 +34,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
@@ -52,8 +52,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     // The first upper case letter has 65
     ///     .max_codepoint(50)
@@ -72,8 +72,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
@@ -91,8 +91,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
@@ -135,8 +135,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
@@ -171,8 +171,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
@@ -200,8 +200,8 @@ impl IntervalSet {
     /// # Examples
     ///
     /// ```rust
-    /// # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-    /// let interval_set = UnicodeVersion::V15_0_0.query()
+    /// # use unicode_intervals::UnicodeCategory;
+    /// let interval_set = unicode_intervals::query()
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .max_codepoint(67)
     ///     .interval_set()
@@ -212,7 +212,7 @@ impl IntervalSet {
     /// assert_eq!(iterator.next(), Some('C' as u32));
     /// assert_eq!(iterator.next(), None);
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = u32> + DoubleEndedIterator + '_ {
         self.intervals
             .iter()
             .flat_map(|(left, right)| *left..=*right)
@@ -226,8 +226,7 @@ mod tests {
     use test_case::test_case;
 
     fn uppercase_letters() -> IntervalSet {
-        UnicodeVersion::V15_0_0
-            .query()
+        crate::query()
             .include_categories(UnicodeCategory::UPPERCASE_LETTER)
             .interval_set()
             .expect("Invalid query input")
@@ -293,9 +292,8 @@ mod tests {
     }
 
     #[test]
-    fn test_intervals_iter() {
-        let intervals = UnicodeVersion::V15_0_0
-            .query()
+    fn test_iter() {
+        let intervals = crate::query()
             .include_categories(UnicodeCategory::LOWERCASE_LETTER)
             .intervals()
             .expect("Invalid query input");
@@ -303,7 +301,7 @@ mod tests {
         let codepoints: Vec<_> = interval_set.iter().collect();
         let mut expected = Vec::with_capacity(interval_set.len());
         for (left, right) in
-            UnicodeVersion::V15_0_0.intervals_for(UnicodeCategory::LOWERCASE_LETTER)
+            UnicodeVersion::latest().intervals_for(UnicodeCategory::LOWERCASE_LETTER)
         {
             for codepoint in *left..=*right {
                 expected.push(codepoint);
@@ -312,5 +310,12 @@ mod tests {
         assert_eq!(codepoints, expected);
         assert_eq!(interval_set.len(), codepoints.len());
         assert!(!interval_set.is_empty());
+    }
+
+    #[test]
+    fn test_iter_rev() {
+        let interval_set = uppercase_letters();
+        let mut iter = interval_set.iter().rev();
+        assert_eq!(iter.next(), Some(125217));
     }
 }
