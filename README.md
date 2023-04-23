@@ -33,6 +33,21 @@ let intervals = UnicodeVersion::V15_0_0.query()
 assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 ```
 
+`IntervalSet` for index-like access to the underlying codepoints:
+
+```rust
+use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+
+let interval_set = UnicodeVersion::V15_0_0.query()
+    .include_categories(UnicodeCategory::UPPERCASE_LETTER)
+    .max_codepoint(128)
+    .interval_set()
+    .expect("Invalid query input");
+// Get 10th codepoint in this interval set
+assert_eq!(interval_set.codepoint_at(10), Some('K' as u32));
+assert_eq!(interval_set.index_of('K'), Some(10));
+```
+
 ## Details
 
 Restrict the output to code points within a certain range:

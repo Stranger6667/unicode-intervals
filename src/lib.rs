@@ -14,6 +14,8 @@
 //!
 //! # Example
 //!
+//! Raw Unicode codepoint intervals:
+//!
 //! ```rust
 //! use unicode_intervals::{UnicodeVersion, UnicodeCategory};
 //!
@@ -24,6 +26,21 @@
 //!     .intervals()
 //!     .expect("Invalid query input");
 //! assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
+//! ```
+//!
+//! `IntervalSet` for index-like access to the underlying codepoints:
+//!
+//! ```rust
+//! use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+//!
+//! let interval_set = UnicodeVersion::V15_0_0.query()
+//!     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
+//!     .max_codepoint(128)
+//!     .interval_set()
+//!     .expect("Invalid query input");
+//! // Get 10th codepoint in this interval set
+//! assert_eq!(interval_set.codepoint_at(10), Some('K' as u32));
+//! assert_eq!(interval_set.index_of('K'), Some(10));
 //! ```
 //!
 //! # Details
@@ -87,11 +104,13 @@ mod categories;
 mod constants;
 mod error;
 mod intervals;
+mod intervalset;
 mod query;
 mod tables;
 pub use crate::{
     categories::{UnicodeCategory, UnicodeCategorySet},
     error::Error,
+    intervalset::IntervalSet,
 };
 
 #[cfg(feature = "__benchmark_internals")]
@@ -360,12 +379,12 @@ impl UnicodeVersion {
         )
     }
 
-    fn intervals_impl<'a>(
+    fn intervals_impl(
         self,
         include_categories: Option<UnicodeCategorySet>,
         exclude_categories: UnicodeCategorySet,
-        include_characters: Option<&'a str>,
-        exclude_characters: Option<&'a str>,
+        include_characters: Option<&str>,
+        exclude_characters: Option<&str>,
         min_codepoint: u32,
         max_codepoint: u32,
     ) -> Result<Vec<Interval>, Error> {
@@ -384,6 +403,32 @@ impl UnicodeVersion {
             min_codepoint,
             max_codepoint,
         ))
+    }
+
+    /// Build an `IndexSet` for the intervals matching the query.
+    ///
+    /// # Errors
+    ///
+    ///   - `min_codepoint > max_codepoint`
+    ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
+    pub fn interval_set<'a>(
+        self,
+        include_categories: impl Into<Option<UnicodeCategorySet>>,
+        exclude_categories: impl Into<Option<UnicodeCategorySet>>,
+        include_characters: impl Into<Option<&'a str>>,
+        exclude_characters: impl Into<Option<&'a str>>,
+        min_codepoint: impl Into<Option<u32>>,
+        max_codepoint: impl Into<Option<u32>>,
+    ) -> Result<IntervalSet, Error> {
+        let intervals = self.intervals(
+            include_categories,
+            exclude_categories,
+            include_characters,
+            exclude_characters,
+            min_codepoint,
+            max_codepoint,
+        )?;
+        Ok(IntervalSet::new(intervals))
     }
 }
 
@@ -486,6 +531,23 @@ impl<'a> IntervalQuery<'a> {
             self.max_codepoint,
         )
     }
+    /// Build an `IndexSet` for the intervals matching the query.
+    ///
+    /// # Errors
+    ///
+    ///   - `min_codepoint > max_codepoint`
+    ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
+    pub fn interval_set(&self) -> Result<IntervalSet, Error> {
+        let intervals = self.version.intervals(
+            self.include_categories,
+            self.exclude_categories,
+            self.include_characters,
+            self.exclude_characters,
+            self.min_codepoint,
+            self.max_codepoint,
+        )?;
+        Ok(IntervalSet::new(intervals))
+    }
 }
 
 #[cfg(test)]
@@ -497,7 +559,11 @@ mod tests {
     #[test_case(None, Some(128), &[(95, 95)])]
     #[test_case(Some(65077), None, &[(65101, 65103), (65343, 65343)])]
     #[test_case(Some(65076), Some(65102), &[(65076, 65076), (65101, 65102)])]
-    fn test_query(min_codepoint: Option<u32>, max_codepoint: Option<u32>, expected: &[Interval]) {
+    fn test_intervals(
+        min_codepoint: Option<u32>,
+        max_codepoint: Option<u32>,
+        expected: &[Interval],
+    ) {
         let intervals = UnicodeVersion::V15_0_0
             .intervals(
                 UnicodeCategory::Pc,
@@ -509,6 +575,14 @@ mod tests {
             )
             .expect("Invalid query");
         assert_eq!(intervals, expected);
+    }
+
+    #[test]
+    fn test_interval_set() {
+        let interval_set = UnicodeVersion::V15_0_0
+            .interval_set(UnicodeCategory::Lu, None, None, None, None, 128)
+            .expect("Invalid query");
+        assert_eq!(interval_set.index_of('A'), Some(0));
     }
 
     #[test]

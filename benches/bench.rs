@@ -116,6 +116,16 @@ fn query(c: &mut Criterion) {
             let _ = version.intervals(UnicodeCategory::Pc, None, "abc", None, 0, 50);
         })
     });
+    let interval_set = UnicodeVersion::V15_0_0
+        .query()
+        .include_categories(UnicodeCategory::UPPERCASE_LETTER)
+        .interval_set()
+        .expect("Invalid query input");
+    c.bench_function("query - interval set - codepoint_at", |b| {
+        b.iter(|| {
+            let _ = interval_set.codepoint_at(27);
+        })
+    });
 }
 
 criterion_group!(default, version, intervals, categories, query);

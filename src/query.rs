@@ -8,12 +8,12 @@ use core::cmp::{max, min};
 
 /// Non-generic query implementation to reduce the amount of generated code.
 #[must_use]
-pub fn query<'a>(
+pub fn query(
     version: UnicodeVersion,
     include_categories: Option<UnicodeCategorySet>,
     exclude_categories: UnicodeCategorySet,
-    include_characters: &'a str,
-    exclude_characters: &'a str,
+    include_characters: &str,
+    exclude_characters: &str,
     min_codepoint: u32,
     max_codepoint: u32,
 ) -> Vec<Interval> {
