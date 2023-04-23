@@ -1,6 +1,6 @@
 [package]
 name = "unicode-intervals"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Dmitry Dygalo <dadygalo@gmail.com>"]
 edition = "2021"
 documentation = "https://github.com/Stranger6667/unicode-intervals"
@@ -15,8 +15,6 @@ ranges, and custom characters sets.
 """
 readme = "README.md"
 include = ["src/**/*", "benches/*.rs", "README.md"]
-
-[dependencies]
 
 [profile.release]
 codegen-units = 1
