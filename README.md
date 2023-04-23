@@ -25,7 +25,10 @@ The example below will produce code point intervals of uppercase & lowercase let
 use unicode_intervals::UnicodeCategory;
 
 let intervals = unicode_intervals::query()
-    .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+    .include_categories(
+        UnicodeCategory::UPPERCASE_LETTER | 
+        UnicodeCategory::LOWERCASE_LETTER
+    )
     .max_codepoint(128)
     .include_characters("☃")
     .intervals()
@@ -76,10 +79,10 @@ Include or exclude specific characters:
 ```rust
 let intervals = unicode_intervals::query()
     .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
-    .include_characters("☃-123")
+    .include_characters("-123")
     .intervals()
     .expect("Invalid query input");
-assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233), (9731, 9731)])
+assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233)])
 ```
 
 ## Unicode version support
