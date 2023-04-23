@@ -52,6 +52,7 @@ Query specific Unicode version:
 
 ```rust
 use unicode_intervals::{UnicodeCategory, UnicodeVersion};
+
 let intervals = UnicodeVersion::V11_0_0.query()
     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
     .max_codepoint(128)
