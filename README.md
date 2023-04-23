@@ -24,52 +24,36 @@ The example below will produce code point intervals of uppercase & lowercase let
 ```rust
 use unicode_intervals::{UnicodeVersion, UnicodeCategory};
 
-let intervals = UnicodeVersion::V15_0_0.query(
-    // include categories
-    UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER,
-    None,        // exclude categories
-    None,        // minimum codepoint
-    128,         // maximum codepoint
-    "☃",         // include characters
-    None         // exclude characters
-).expect("Invalid query input");
-assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)])
+let intervals = UnicodeVersion::V15_0_0.query()
+    .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+    .max_codepoint(128)
+    .include_characters("☃")
+    .intervals()
+    .expect("Invalid query input");
+assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 ```
 
 ## Details
 
-Include or exclude Unicode general categories and their combinations by their full name or abbreviation:
-
-```rust
-// All letters + open punctuation
-let categories = UnicodeCategory::L | UnicodeCategory::Ps;
-```
-
 Restrict the output to code points within a certain range:
 
 ```rust
-let intervals = UnicodeVersion::V15_0_0.query(
-    None,
-    None,
-    65,
-    128,
-    None,
-    None
-).expect("Invalid query input");
+let intervals = UnicodeVersion::V15_0_0.query()
+    .min_codepoint(65)
+    .max_codepoint(128)
+    .intervals()
+    .expect("Invalid query input");
 assert_eq!(intervals, &[(65, 128)])
 ```
 
 Include or exclude specific characters:
 
 ```rust
-let intervals = UnicodeVersion::V15_0_0.query(
-    UnicodeCategory::PARAGRAPH_SEPARATOR,
-    None,
-    None,
-    None,
-    "☃-123",
-    None
-).expect("Invalid query input");
+let intervals = UnicodeVersion::V15_0_0.query()
+    .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
+    .include_characters("☃-123")
+    .intervals()
+    .expect("Invalid query input");
 assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233), (9731, 9731)])
 ```
 
