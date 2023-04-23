@@ -77,43 +77,43 @@ fn query(c: &mut Criterion) {
     let max_codepoint = black_box(Some(128));
     c.bench_function("query - top level - only codepoints", |b| {
         b.iter(|| {
-            let _ = version.query(
+            let _ = version.intervals(
                 None,
                 exclude_categories,
+                None,
+                None,
                 min_codepoint,
                 max_codepoint,
-                None,
-                None,
             );
         })
     });
     c.bench_function("query - top level - exclude chars", |b| {
         b.iter(|| {
-            let _ = version.query(
+            let _ = version.intervals(
                 None,
                 exclude_categories,
-                min_codepoint,
-                max_codepoint,
                 None,
                 black_box(Some("A@т")),
+                min_codepoint,
+                max_codepoint,
             );
         })
     });
     c.bench_function("query - top level - include and exclude chars", |b| {
         b.iter(|| {
-            let _ = version.query(
+            let _ = version.intervals(
                 None,
                 exclude_categories,
-                min_codepoint,
-                max_codepoint,
                 black_box(Some("0123456789")),
                 black_box(Some("QWERTYUIOP")),
+                min_codepoint,
+                max_codepoint,
             );
         })
     });
     c.bench_function("query - top level - include only", |b| {
         b.iter(|| {
-            let _ = version.query(UnicodeCategory::Pc, None, 0, 50, "abc", None);
+            let _ = version.intervals(UnicodeCategory::Pc, None, "abc", None, 0, 50);
         })
     });
 }

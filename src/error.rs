@@ -3,7 +3,7 @@ use core::fmt;
 use std::error;
 
 /// Errors during Unicode intervals manipulations.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum Error {
     /// Provided category name is invalid.
     InvalidCategory(Box<str>),

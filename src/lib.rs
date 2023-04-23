@@ -17,41 +17,26 @@
 //! ```rust
 //! use unicode_intervals::{UnicodeVersion, UnicodeCategory};
 //!
-//! let intervals = UnicodeVersion::V15_0_0.query(
-//!     // include categories
-//!     UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER,
-//!     None,        // exclude categories
-//!     None,        // minimum codepoint
-//!     128,         // maximum codepoint
-//!     "☃",         // include characters
-//!     None         // exclude characters
-//! ).expect("Invalid query input");
-//! assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)])
+//! let intervals = UnicodeVersion::V15_0_0.query()
+//!     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+//!     .max_codepoint(128)
+//!     .include_characters("☃")
+//!     .intervals()
+//!     .expect("Invalid query input");
+//! assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 //! ```
 //!
 //! # Details
-//!
-//! Include or exclude Unicode general categories and their combinations by their full name or
-//! abbreviation:
-//!
-//! ```rust
-//! # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-//! // All letters + open punctuation
-//! let categories = UnicodeCategory::L | UnicodeCategory::Ps;
-//! ```
 //!
 //! Restrict the output to code points within a certain range:
 //!
 //! ```rust
 //! # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-//! let intervals = UnicodeVersion::V15_0_0.query(
-//!     None,
-//!     None,
-//!     65,
-//!     128,
-//!     None,
-//!     None
-//! ).expect("Invalid query input");
+//! let intervals = UnicodeVersion::V15_0_0.query()
+//!     .min_codepoint(65)
+//!     .max_codepoint(128)
+//!     .intervals()
+//!     .expect("Invalid query input");
 //! assert_eq!(intervals, &[(65, 128)])
 //! ```
 //!
@@ -59,14 +44,11 @@
 //!
 //! ```rust
 //! # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-//! let intervals = UnicodeVersion::V15_0_0.query(
-//!     UnicodeCategory::PARAGRAPH_SEPARATOR,
-//!     None,
-//!     None,
-//!     None,
-//!     "☃-123",
-//!     None
-//! ).expect("Invalid query input");
+//! let intervals = UnicodeVersion::V15_0_0.query()
+//!     .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
+//!     .include_characters("☃-123")
+//!     .intervals()
+//!     .expect("Invalid query input");
 //! assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233), (9731, 9731)])
 //! ```
 //!
@@ -341,28 +323,52 @@ impl UnicodeVersion {
         output
     }
 
-    /// Return a vector of intervals covering the codepoints for all codepoints
-    /// that meet the input criteria.
+    /// A Query builder for specifying the input parameters to the `intervals()` method.
+    #[must_use]
+    #[inline]
+    pub fn query(&self) -> IntervalQuery<'_> {
+        IntervalQuery::new(*self)
+    }
+
+    /// Find intervals matching the query.
     ///
     /// # Errors
     ///
     ///   - `min_codepoint > max_codepoint`
     ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
-    #[inline]
-    pub fn query<'a>(
+    pub fn intervals<'a>(
         self,
         include_categories: impl Into<Option<UnicodeCategorySet>>,
         exclude_categories: impl Into<Option<UnicodeCategorySet>>,
-        min_codepoint: impl Into<Option<u32>>,
-        max_codepoint: impl Into<Option<u32>>,
         include_characters: impl Into<Option<&'a str>>,
         exclude_characters: impl Into<Option<&'a str>>,
+        min_codepoint: impl Into<Option<u32>>,
+        max_codepoint: impl Into<Option<u32>>,
     ) -> Result<Vec<Interval>, Error> {
         let exclude_categories: UnicodeCategorySet = exclude_categories
             .into()
             .unwrap_or_else(UnicodeCategorySet::new);
         let min_codepoint = min_codepoint.into().unwrap_or(0);
         let max_codepoint = max_codepoint.into().unwrap_or(MAX_CODEPOINT);
+        self.intervals_impl(
+            include_categories.into(),
+            exclude_categories,
+            include_characters.into(),
+            exclude_characters.into(),
+            min_codepoint,
+            max_codepoint,
+        )
+    }
+
+    fn intervals_impl<'a>(
+        self,
+        include_categories: Option<UnicodeCategorySet>,
+        exclude_categories: UnicodeCategorySet,
+        include_characters: Option<&'a str>,
+        exclude_characters: Option<&'a str>,
+        min_codepoint: u32,
+        max_codepoint: u32,
+    ) -> Result<Vec<Interval>, Error> {
         if min_codepoint > MAX_CODEPOINT || max_codepoint > MAX_CODEPOINT {
             return Err(Error::CodepointNotInRange(min_codepoint, max_codepoint));
         }
@@ -371,13 +377,114 @@ impl UnicodeVersion {
         }
         Ok(query::query(
             self,
-            include_categories.into(),
+            include_categories,
             exclude_categories,
+            include_characters.unwrap_or(""),
+            exclude_characters.unwrap_or(""),
             min_codepoint,
             max_codepoint,
-            include_characters.into(),
-            exclude_characters.into(),
         ))
+    }
+}
+
+/// A Query builder for specifying the input parameters to the `intervals()` method in `UnicodeVersion`.
+///
+/// The builder allows for a more convenient and readable way to specify the input parameters,
+/// instead of relying on multiple function arguments.
+///
+/// # Examples
+///
+/// ```rust
+/// use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+///
+/// let intervals = UnicodeVersion::V15_0_0.query()
+///     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+///     .max_codepoint(128)
+///     .include_characters("☃")
+///     .intervals()
+///     .expect("Invalid query input");
+/// assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
+/// ```
+#[derive(Debug)]
+pub struct IntervalQuery<'a> {
+    version: UnicodeVersion,
+    include_categories: Option<UnicodeCategorySet>,
+    exclude_categories: Option<UnicodeCategorySet>,
+    include_characters: Option<&'a str>,
+    exclude_characters: Option<&'a str>,
+    min_codepoint: u32,
+    max_codepoint: u32,
+}
+
+impl<'a> IntervalQuery<'a> {
+    fn new(version: UnicodeVersion) -> IntervalQuery<'a> {
+        IntervalQuery {
+            version,
+            include_categories: None,
+            exclude_categories: None,
+            include_characters: None,
+            exclude_characters: None,
+            min_codepoint: 0,
+            max_codepoint: MAX_CODEPOINT,
+        }
+    }
+    /// Set `include_categories`.
+    #[must_use]
+    pub fn include_categories(
+        mut self,
+        include_categories: impl Into<Option<UnicodeCategorySet>>,
+    ) -> IntervalQuery<'a> {
+        self.include_categories = include_categories.into();
+        self
+    }
+    /// Set `exclude_categories`.
+    #[must_use]
+    pub fn exclude_categories(
+        mut self,
+        exclude_categories: impl Into<Option<UnicodeCategorySet>>,
+    ) -> IntervalQuery<'a> {
+        self.exclude_categories = exclude_categories.into();
+        self
+    }
+    /// Set `include_characters`.
+    #[must_use]
+    pub fn include_characters(mut self, include_characters: &'a str) -> IntervalQuery<'a> {
+        self.include_characters = Some(include_characters);
+        self
+    }
+    /// Set `exclude_characters`.
+    #[must_use]
+    pub fn exclude_characters(mut self, exclude_characters: &'a str) -> IntervalQuery<'a> {
+        self.exclude_characters = Some(exclude_characters);
+        self
+    }
+    /// Set `min_codepoint`.
+    #[must_use]
+    pub fn min_codepoint(mut self, min_codepoint: u32) -> IntervalQuery<'a> {
+        self.min_codepoint = min_codepoint;
+        self
+    }
+    /// Set `max_codepoint`.
+    #[must_use]
+    pub fn max_codepoint(mut self, max_codepoint: u32) -> IntervalQuery<'a> {
+        self.max_codepoint = max_codepoint;
+        self
+    }
+    /// Find intervals matching the query.
+    ///
+    /// # Errors
+    ///
+    ///   - `min_codepoint > max_codepoint`
+    ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
+    pub fn intervals(&self) -> Result<Vec<Interval>, Error> {
+        self.version.intervals(
+            self.include_categories,
+            self.exclude_categories,
+            self.include_characters,
+            self.exclude_characters,
+            self.min_codepoint,
+            self.max_codepoint,
+        )
     }
 }
 
@@ -392,13 +499,13 @@ mod tests {
     #[test_case(Some(65076), Some(65102), &[(65076, 65076), (65101, 65102)])]
     fn test_query(min_codepoint: Option<u32>, max_codepoint: Option<u32>, expected: &[Interval]) {
         let intervals = UnicodeVersion::V15_0_0
-            .query(
+            .intervals(
                 UnicodeCategory::Pc,
+                None,
+                None,
                 None,
                 min_codepoint,
                 max_codepoint,
-                None,
-                None,
             )
             .expect("Invalid query");
         assert_eq!(intervals, expected);
@@ -407,15 +514,43 @@ mod tests {
     #[test]
     fn test_query_include_only_characters() {
         let intervals = UnicodeVersion::V15_0_0
-            .query(UnicodeCategory::Pc, None, 0, 50, "abc", None)
+            .query()
+            .include_categories(UnicodeCategory::Pc)
+            .min_codepoint(0)
+            .max_codepoint(50)
+            .include_characters("abc")
+            .intervals()
             .expect("Invalid query");
         assert_eq!(intervals, &[(97, 99)]);
     }
 
     #[test]
+    fn test_query_exclude_only_characters() {
+        let intervals = UnicodeVersion::V15_0_0
+            .query()
+            .include_categories(UnicodeCategory::UPPERCASE_LETTER)
+            .max_codepoint(90)
+            .exclude_characters("ABC")
+            .intervals()
+            .expect("Invalid query");
+        assert_eq!(intervals, &[(68, 90)]);
+    }
+
+    #[test]
+    fn test_query_exclude_categories() {
+        let intervals = UnicodeVersion::V15_0_0
+            .query()
+            .exclude_categories(UnicodeCategory::UPPERCASE_LETTER)
+            .max_codepoint(90)
+            .intervals()
+            .expect("Invalid query");
+        assert_eq!(intervals, &[(0, 64)]);
+    }
+
+    #[test]
     fn test_query_include_category_and_characters() {
         let intervals = UnicodeVersion::V15_0_0
-            .query(UnicodeCategory::Pc, None, None, None, "abc", None)
+            .intervals(UnicodeCategory::Pc, None, "abc", None, None, None)
             .expect("Invalid query");
         assert_eq!(
             intervals,
@@ -448,7 +583,10 @@ mod tests {
     )]
     fn test_query_invalid_codepoints(min_codepoint: u32, max_codepoint: u32, expected: &str) {
         let error = UnicodeVersion::V15_0_0
-            .query(None, None, min_codepoint, max_codepoint, None, None)
+            .query()
+            .min_codepoint(min_codepoint)
+            .max_codepoint(max_codepoint)
+            .intervals()
             .expect_err("Should error");
         assert_eq!(error.to_string(), expected);
     }

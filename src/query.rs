@@ -12,14 +12,12 @@ pub fn query<'a>(
     version: UnicodeVersion,
     include_categories: Option<UnicodeCategorySet>,
     exclude_categories: UnicodeCategorySet,
+    include_characters: &'a str,
+    exclude_characters: &'a str,
     min_codepoint: u32,
     max_codepoint: u32,
-    include_characters: Option<&'a str>,
-    exclude_characters: Option<&'a str>,
 ) -> Vec<Interval> {
     let categories = categories::merge(include_categories, exclude_categories);
-    let include_characters = include_characters.unwrap_or("");
-    let exclude_characters = exclude_characters.unwrap_or("");
 
     let include_intervals = intervals::from_str(include_characters);
     let exclude_intervals = intervals::from_str(exclude_characters);
