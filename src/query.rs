@@ -5,6 +5,7 @@ use crate::{
     intervals, Interval, UnicodeVersion,
 };
 use core::cmp::{max, min};
+use std::borrow::Cow;
 
 /// Non-generic query implementation to reduce the amount of generated code.
 #[must_use]
@@ -26,11 +27,11 @@ pub fn query(
     // Depending on the codepoint range, it could be less work to do
     let mut intervals = match (min_codepoint, max_codepoint) {
         // Full range, no need to filter
-        (0, MAX_CODEPOINT) => full,
+        (0, MAX_CODEPOINT) => full.to_vec(),
         // Only check for the left bound
         (0, _) => {
             let mut intervals = vec![];
-            for (left, right) in full {
+            for (left, right) in full.iter().copied() {
                 if left > max_codepoint {
                     // Intervals are sorted - all subsequent ones are greater than `max_codepoint`
                     break;
@@ -42,7 +43,7 @@ pub fn query(
         // Only check for the right bound
         (_, MAX_CODEPOINT) => {
             let mut intervals = vec![];
-            for (left, right) in full {
+            for (left, right) in full.iter().copied() {
                 if right >= min_codepoint {
                     intervals.push((max(left, min_codepoint), min(right, max_codepoint)));
                 }
@@ -52,7 +53,7 @@ pub fn query(
         // Check for both bounds
         _ => {
             let mut intervals = vec![];
-            for (left, right) in full {
+            for (left, right) in full.iter().copied() {
                 if left > max_codepoint {
                     // Intervals are sorted - all subsequent ones are greater than `max_codepoint`
                     break;
@@ -67,7 +68,7 @@ pub fn query(
     if intervals.is_empty() {
         intervals = include_intervals;
     } else if !include_intervals.is_empty() {
-        intervals.extend(include_intervals);
+        intervals.extend_from_slice(&include_intervals);
         intervals::merge(&mut intervals);
     }
     // Exclude intervals
@@ -78,16 +79,19 @@ pub fn query(
 /// The final intervals are merged and sorted.
 #[inline]
 #[must_use]
-pub fn intervals_for_set(version: UnicodeVersion, categories: UnicodeCategorySet) -> Vec<Interval> {
+pub fn intervals_for_set(
+    version: UnicodeVersion,
+    categories: UnicodeCategorySet,
+) -> Cow<'static, [Interval]> {
     match categories.into_value() {
-        0 => vec![],
-        ALL_CATEGORIES => vec![(0, MAX_CODEPOINT)],
+        0 => Cow::Borrowed(&[]),
+        ALL_CATEGORIES => Cow::Borrowed(&[(0, MAX_CODEPOINT)]),
         value => {
             if categories.len() == 1 {
                 // If there is only one category - just transform the corresponding slice to a vector
                 // the intervals there are sorted and do not intersect
                 let category_idx = value.trailing_zeros() as usize;
-                version.table()[category_idx].to_vec()
+                Cow::Borrowed(version.table()[category_idx])
             } else {
                 // Pre-allocate space for intervals from all categories
                 let size: usize = categories
@@ -99,7 +103,7 @@ pub fn intervals_for_set(version: UnicodeVersion, categories: UnicodeCategorySet
                     intervals.extend_from_slice(version.table()[category as usize]);
                 }
                 intervals::merge(&mut intervals);
-                intervals
+                Cow::Owned(intervals)
             }
         }
     }

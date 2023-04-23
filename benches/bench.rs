@@ -119,7 +119,7 @@ fn query(c: &mut Criterion) {
     });
     c.bench_function("query - top level - include only", |b| {
         b.iter(|| {
-            let _ = version.intervals(UnicodeCategory::Pc, None, "abc", None, 0, 50);
+            let _ = version.intervals(UnicodeCategory::Ll, None, "ABC", None, 0, 50);
         })
     });
     let interval_set = UnicodeVersion::V15_0_0
