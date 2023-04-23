@@ -17,14 +17,14 @@ unicode-intervals = "0.1"
 
 <br>
 
-## Example
+## Examples
 
 The example below will produce code point intervals of uppercase & lowercase letters less than 128 and will include the `☃` character.
 
 ```rust
-use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+use unicode_intervals::UnicodeCategory;
 
-let intervals = UnicodeVersion::V15_0_0.query()
+let intervals = unicode_intervals::query()
     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
     .max_codepoint(128)
     .include_characters("☃")
@@ -36,9 +36,9 @@ assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 `IntervalSet` for index-like access to the underlying codepoints:
 
 ```rust
-use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+use unicode_intervals::UnicodeCategory;
 
-let interval_set = UnicodeVersion::V15_0_0.query()
+let interval_set = unicode_intervals::query()
     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     .max_codepoint(128)
     .interval_set()
@@ -48,12 +48,23 @@ assert_eq!(interval_set.codepoint_at(10), Some('K' as u32));
 assert_eq!(interval_set.index_of('K'), Some(10));
 ```
 
-## Details
+Query specific Unicode version:
+
+```rust
+use unicode_intervals::{UnicodeCategory, UnicodeVersion};
+let intervals = UnicodeVersion::V11_0_0.query()
+    .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+    .max_codepoint(128)
+    .include_characters("☃")
+    .intervals()
+    .expect("Invalid query input");
+assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
+```
 
 Restrict the output to code points within a certain range:
 
 ```rust
-let intervals = UnicodeVersion::V15_0_0.query()
+let intervals = unicode_intervals::query()
     .min_codepoint(65)
     .max_codepoint(128)
     .intervals()
@@ -64,7 +75,7 @@ assert_eq!(intervals, &[(65, 128)])
 Include or exclude specific characters:
 
 ```rust
-let intervals = UnicodeVersion::V15_0_0.query()
+let intervals = unicode_intervals::query()
     .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
     .include_characters("☃-123")
     .intervals()

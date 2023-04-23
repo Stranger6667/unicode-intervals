@@ -12,14 +12,14 @@
 //! The main purpose of `unicode-intervals` is to simplify generating strings that matching
 //! specific criteria.
 //!
-//! # Example
+//! # Examples
 //!
-//! Raw Unicode codepoint intervals:
+//! Raw Unicode codepoint intervals from the latest Unicode version:
 //!
 //! ```rust
-//! use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+//! use unicode_intervals::UnicodeCategory;
 //!
-//! let intervals = UnicodeVersion::V15_0_0.query()
+//! let intervals = unicode_intervals::query()
 //!     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
 //!     .max_codepoint(128)
 //!     .include_characters("☃")
@@ -31,9 +31,9 @@
 //! `IntervalSet` for index-like access to the underlying codepoints:
 //!
 //! ```rust
-//! use unicode_intervals::{UnicodeVersion, UnicodeCategory};
+//! use unicode_intervals::UnicodeCategory;
 //!
-//! let interval_set = UnicodeVersion::V15_0_0.query()
+//! let interval_set = unicode_intervals::query()
 //!     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
 //!     .max_codepoint(128)
 //!     .interval_set()
@@ -43,13 +43,24 @@
 //! assert_eq!(interval_set.index_of('K'), Some(10));
 //! ```
 //!
-//! # Details
+//! Query specific Unicode version:
+//!
+//! ```rust
+//! use unicode_intervals::{UnicodeCategory, UnicodeVersion};
+//!
+//! let intervals = UnicodeVersion::V11_0_0.query()
+//!     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
+//!     .max_codepoint(128)
+//!     .include_characters("☃")
+//!     .intervals()
+//!     .expect("Invalid query input");
+//! assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
+//! ```
 //!
 //! Restrict the output to code points within a certain range:
 //!
 //! ```rust
-//! # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-//! let intervals = UnicodeVersion::V15_0_0.query()
+//! let intervals = unicode_intervals::query()
 //!     .min_codepoint(65)
 //!     .max_codepoint(128)
 //!     .intervals()
@@ -60,8 +71,8 @@
 //! Include or exclude specific characters:
 //!
 //! ```rust
-//! # use unicode_intervals::{UnicodeVersion, UnicodeCategory};
-//! let intervals = UnicodeVersion::V15_0_0.query()
+//! # use unicode_intervals::UnicodeCategory;
+//! let intervals = unicode_intervals::query()
 //!     .include_categories(UnicodeCategory::PARAGRAPH_SEPARATOR)
 //!     .include_characters("☃-123")
 //!     .intervals()
@@ -195,7 +206,11 @@ impl UnicodeVersion {
             UnicodeVersion::V15_0_0 => "15.0.0",
         }
     }
-
+    /// Get the latest Unicode version.
+    #[must_use]
+    pub const fn latest() -> UnicodeVersion {
+        UnicodeVersion::V15_0_0
+    }
     /// A sorted slice of slices where each item is a slice of intervals for every Unicode category.
     /// They are sorted alphabetically by their full name.
     #[inline]
@@ -342,11 +357,11 @@ impl UnicodeVersion {
         output
     }
 
-    /// A Query builder for specifying the input parameters to the `intervals()` method.
+    /// A Query builder for specifying the input parameters to `intervals()` / `interval_set` methods.
     #[must_use]
     #[inline]
-    pub fn query(&self) -> IntervalQuery<'_> {
-        IntervalQuery::new(*self)
+    pub fn query<'a>(self) -> IntervalQuery<'a> {
+        IntervalQuery::new(self)
     }
 
     /// Find intervals matching the query.
@@ -550,6 +565,13 @@ impl<'a> IntervalQuery<'a> {
     }
 }
 
+/// Build a query that finds Unicode intervals matching the query criteria.
+///
+/// Uses the latest available Unicode version.
+pub fn query<'a>() -> IntervalQuery<'a> {
+    UnicodeVersion::latest().query()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,6 +605,14 @@ mod tests {
             .interval_set(UnicodeCategory::Lu, None, None, None, None, 128)
             .expect("Invalid query");
         assert_eq!(interval_set.index_of('A'), Some(0));
+    }
+
+    #[test]
+    fn test_top_level_query() {
+        assert_eq!(
+            query().intervals().expect("Invalid query"),
+            vec![(0, MAX_CODEPOINT)]
+        );
     }
 
     #[test]
@@ -661,6 +691,13 @@ mod tests {
             .min_codepoint(min_codepoint)
             .max_codepoint(max_codepoint)
             .intervals()
+            .expect_err("Should error");
+        assert_eq!(error.to_string(), expected);
+        let error = UnicodeVersion::V15_0_0
+            .query()
+            .min_codepoint(min_codepoint)
+            .max_codepoint(max_codepoint)
+            .interval_set()
             .expect_err("Should error");
         assert_eq!(error.to_string(), expected);
     }
