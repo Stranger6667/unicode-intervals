@@ -35,7 +35,6 @@
 //!
 //! let interval_set = unicode_intervals::query()
 //!     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
-//!     .max_codepoint(128)
 //!     .interval_set()
 //!     .expect("Invalid query input");
 //! // Get 10th codepoint in this interval set
@@ -49,12 +48,11 @@
 //! use unicode_intervals::{UnicodeCategory, UnicodeVersion};
 //!
 //! let intervals = UnicodeVersion::V11_0_0.query()
-//!     .include_categories(UnicodeCategory::UPPERCASE_LETTER | UnicodeCategory::LOWERCASE_LETTER)
 //!     .max_codepoint(128)
 //!     .include_characters("☃")
 //!     .intervals()
 //!     .expect("Invalid query input");
-//! assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
+//! assert_eq!(intervals, &[(0, 128), (9731, 9731)]);
 //! ```
 //!
 //! Restrict the output to code points within a certain range:
