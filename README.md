@@ -3,7 +3,7 @@ unicode-intervals
 
 [<img alt="github" src="https://img.shields.io/badge/github-8da0cb?style=flat-square&labelColor=555555&logo=github" height="20">](https://github.com/Stranger6667/unicode-intervals)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/unicode-intervals.svg?style=flat-square&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/unicode-intervals)
-[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/unicode-intervals)
+[<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-unicode_intervals-66c2a5?style=flat-square&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/unicode-intervals)
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/Stranger6667/unicode-intervals/ci.yml?branch=main&style=flat-square" height="20">](https://github.com/Stranger6667/unicode-intervals/actions?query=branch%3Amain)
 
 This library provides a way to search for Unicode code point intervals by categories, ranges, and custom character sets.
