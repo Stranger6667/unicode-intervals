@@ -318,4 +318,15 @@ mod tests {
         let mut iter = interval_set.iter().rev();
         assert_eq!(iter.next(), Some(125217));
     }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn test_interval_set_traits() {
+        let interval_set = IntervalSet::new(vec![(0, 1)]);
+        let _ = interval_set.clone();
+        assert_eq!(
+            format!("{interval_set:?}"),
+            "IntervalSet { intervals: [(0, 1)], offsets: [0, 2], size: 2 }"
+        );
+    }
 }

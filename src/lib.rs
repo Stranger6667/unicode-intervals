@@ -466,7 +466,7 @@ impl UnicodeVersion {
 ///     .expect("Invalid query input");
 /// assert_eq!(intervals, &[(65, 90), (97, 122), (9731, 9731)]);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IntervalQuery<'a> {
     version: UnicodeVersion,
     include_categories: Option<UnicodeCategorySet>,
@@ -554,15 +554,14 @@ impl<'a> IntervalQuery<'a> {
     ///   - `min_codepoint > max_codepoint`
     ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
     pub fn interval_set(&self) -> Result<IntervalSet, Error> {
-        let intervals = self.version.intervals(
+        self.version.interval_set(
             self.include_categories,
             self.exclude_categories,
             self.include_characters,
             self.exclude_characters,
             self.min_codepoint,
             self.max_codepoint,
-        )?;
-        Ok(IntervalSet::new(intervals))
+        )
     }
 }
 
@@ -576,6 +575,10 @@ pub fn query<'a>() -> IntervalQuery<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
     use test_case::test_case;
 
     #[test_case(None, None, &[(95, 95), (8255, 8256), (8276, 8276), (65075, 65076), (65101, 65103), (65343, 65343)])]
@@ -816,10 +819,25 @@ mod tests {
         );
     }
 
-    fn hash(_: impl core::hash::Hash) {}
+    #[test]
+    #[allow(clippy::clone_on_copy)]
+    fn test_unicode_version_traits() {
+        let version = UnicodeVersion::V15_0_0;
+        let mut hasher = DefaultHasher::new();
+        version.hash(&mut hasher);
+        hasher.finish();
+        let _ = version.clone();
+        assert_eq!(format!("{version:?}"), "V15_0_0");
+    }
 
     #[test]
-    fn test_is_hashable() {
-        hash(UnicodeVersion::V15_0_0);
+    fn test_interval_query_traits() {
+        let query = UnicodeVersion::V15_0_0.query();
+        let _ = query.clone();
+        assert_eq!(
+            format!("{query:?}"), 
+            "IntervalQuery { version: V15_0_0, include_categories: None, exclude_categories: None, include_characters: None, exclude_characters: None, min_codepoint: 0, max_codepoint: 1114111 }"
+        );
+        assert_eq!(query, query);
     }
 }

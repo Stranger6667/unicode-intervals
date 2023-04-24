@@ -504,9 +504,11 @@ pub const fn merge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
     use test_case::test_case;
-
-    fn hash(_: impl core::hash::Hash) {}
 
     #[test]
     fn test_category_from_str_error() {
@@ -519,8 +521,13 @@ mod tests {
     }
 
     #[test]
-    fn test_category_is_hashable() {
-        hash(Ll);
+    #[allow(clippy::clone_on_copy)]
+    fn test_category_traits() {
+        let mut hasher = DefaultHasher::new();
+        Ll.hash(&mut hasher);
+        hasher.finish();
+        let _ = Ll.clone();
+        assert_eq!(format!("{Ll:?}"), "Ll");
     }
 
     #[test]
@@ -534,12 +541,41 @@ mod tests {
     }
 
     #[test]
-    fn test_set_add_category() {
+    fn test_set_add() {
         let mut set = UnicodeCategorySet::new();
         assert!(set.is_empty());
         set.add(Ll);
         assert!(set.contains(Ll));
         assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn test_set_remove() {
+        let mut set = UnicodeCategorySet::all();
+        assert!(set.contains(Ll));
+        set.remove(Ll);
+        assert!(!set.contains(Ll));
+    }
+
+    #[test]
+    #[allow(clippy::clone_on_copy)]
+    fn test_category_set_traits() {
+        let set = UnicodeCategory::L;
+        let mut hasher = DefaultHasher::new();
+        set.hash(&mut hasher);
+        hasher.finish();
+        let _ = set.clone();
+        assert_eq!(format!("{set:?}"), "UnicodeCategorySet(671371264)");
+    }
+
+    #[test]
+    fn test_iter_traits() {
+        let set = UnicodeCategory::L;
+        let iter = set.iter();
+        assert_eq!(
+            format!("{iter:?}"),
+            "Iter { data: UnicodeCategorySet(671371264) }"
+        );
     }
 
     #[test]
@@ -574,11 +610,6 @@ mod tests {
     #[test]
     fn test_set_default() {
         assert_eq!(UnicodeCategorySet::default(), UnicodeCategorySet::new());
-    }
-
-    #[test]
-    fn test_set_is_hashable() {
-        hash(UnicodeCategory::L);
     }
 
     #[test]

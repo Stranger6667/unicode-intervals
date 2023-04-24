@@ -35,3 +35,15 @@ impl fmt::Display for Error {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_traits() {
+        let error = Error::InvalidCodepoints(1, 1);
+        assert_eq!(error, error);
+        assert_eq!(format!("{error:?}"), "InvalidCodepoints(1, 1)");
+    }
+}
