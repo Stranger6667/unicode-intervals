@@ -46,7 +46,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ matrix.rust }}-cargo-cache
+          key: ${{ matrix.target }}-${{ matrix.toolchain }}-cargo-cache
 
       - name: Install Wasmtime
         if: matrix.target == 'wasm32-wasi'
