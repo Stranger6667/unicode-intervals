@@ -65,9 +65,10 @@ pub fn merge(intervals: &mut Vec<Interval>) {
     let mut border = 0_usize;
     for index in 1..intervals.len() {
         let interval = intervals[index];
-        if interval.0 <= intervals[border].1 + 1 {
+        let right = intervals[border].1;
+        if interval.0 <= right + 1 {
             // Intervals overlap
-            if interval.1 > intervals[border].1 {
+            if interval.1 > right {
                 // Extend the one behind the border only if the current candidate right border
                 // is greater
                 intervals[border].1 = interval.1;

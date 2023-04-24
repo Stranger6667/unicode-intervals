@@ -51,7 +51,7 @@ fn categories(c: &mut Criterion) {
 }
 
 fn query(c: &mut Criterion) {
-    let version = black_box(unicode_intervals::UnicodeVersion::V15_0_0);
+    let version = black_box(UnicodeVersion::V15_0_0);
     c.bench_function("query - intervals_for_set - empty", |b| {
         b.iter(|| {
             let _ =
