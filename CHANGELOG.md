@@ -7,6 +7,7 @@
 - Reduce allocations inside `query` for cases when a few Unicode categories are involved.
 - Rename `UnicodeCategorySet::add_category` to `UnicodeCategorySet::add` and `UnicodeCategorySet::has_category` to `UnicodeCategorySet::contains`.
 - Add `UnicodeCategorySet::remove`.
+- Only sort intervals after applying the codepoints filter.
 
 ## [0.1.2] - 2023-04-23
 

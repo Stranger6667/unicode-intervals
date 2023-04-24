@@ -32,11 +32,9 @@ pub fn query(
         (0, _) => {
             let mut intervals = vec![];
             for (left, right) in full.iter().copied() {
-                if left > max_codepoint {
-                    // Intervals are sorted - all subsequent ones are greater than `max_codepoint`
-                    break;
+                if left <= max_codepoint {
+                    intervals.push((max(left, min_codepoint), min(right, max_codepoint)));
                 }
-                intervals.push((max(left, min_codepoint), min(right, max_codepoint)));
             }
             intervals
         }
@@ -54,10 +52,7 @@ pub fn query(
         _ => {
             let mut intervals = vec![];
             for (left, right) in full.iter().copied() {
-                if left > max_codepoint {
-                    // Intervals are sorted - all subsequent ones are greater than `max_codepoint`
-                    break;
-                } else if right >= min_codepoint {
+                if left <= max_codepoint && right >= min_codepoint {
                     intervals.push((max(left, min_codepoint), min(right, max_codepoint)));
                 }
             }
@@ -69,6 +64,8 @@ pub fn query(
         intervals = include_intervals;
     } else if !include_intervals.is_empty() {
         intervals.extend_from_slice(&include_intervals);
+        intervals::merge(&mut intervals);
+    } else {
         intervals::merge(&mut intervals);
     }
     // Exclude intervals
@@ -88,8 +85,6 @@ pub fn intervals_for_set(
         ALL_CATEGORIES => Cow::Borrowed(&[(0, MAX_CODEPOINT)]),
         value => {
             if categories.len() == 1 {
-                // If there is only one category - just transform the corresponding slice to a vector
-                // the intervals there are sorted and do not intersect
                 let category_idx = value.trailing_zeros() as usize;
                 Cow::Borrowed(version.table()[category_idx])
             } else {
@@ -102,7 +97,6 @@ pub fn intervals_for_set(
                 for category in categories.iter() {
                     intervals.extend_from_slice(version.table()[category as usize]);
                 }
-                intervals::merge(&mut intervals);
                 Cow::Owned(intervals)
             }
         }
