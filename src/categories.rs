@@ -276,6 +276,11 @@ impl UnicodeCategorySet {
     pub fn add(&mut self, category: UnicodeCategory) {
         self.set(category as u8);
     }
+    /// Remove a Unicode category from the set.
+    #[inline]
+    pub fn remove(&mut self, category: UnicodeCategory) {
+        self.unset(category as u8);
+    }
     /// Whether the set contains `category`.
     #[inline]
     #[must_use]
