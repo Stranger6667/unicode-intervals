@@ -273,13 +273,13 @@ impl UnicodeCategorySet {
     }
     /// Add a new Unicode category to the set.
     #[inline]
-    pub fn add_category(&mut self, category: UnicodeCategory) {
+    pub fn add(&mut self, category: UnicodeCategory) {
         self.set(category as u8);
     }
     /// Whether the set contains `category`.
     #[inline]
     #[must_use]
-    pub const fn has_category(self, category: UnicodeCategory) -> bool {
+    pub const fn contains(self, category: UnicodeCategory) -> bool {
         self.is_set(category as u8)
     }
     /// The size of the set.
@@ -398,7 +398,7 @@ impl BitOrAssign<UnicodeCategorySet> for UnicodeCategorySet {
 impl BitOrAssign<UnicodeCategory> for UnicodeCategorySet {
     #[inline]
     fn bitor_assign(&mut self, rhs: UnicodeCategory) {
-        self.add_category(rhs);
+        self.add(rhs);
     }
 }
 
@@ -532,8 +532,8 @@ mod tests {
     fn test_set_add_category() {
         let mut set = UnicodeCategorySet::new();
         assert!(set.is_empty());
-        set.add_category(Ll);
-        assert!(set.has_category(Ll));
+        set.add(Ll);
+        assert!(set.contains(Ll));
         assert_eq!(set.len(), 1);
     }
 
@@ -561,7 +561,7 @@ mod tests {
                 UnicodeCategory::from_str(&name).expect("Invalid category"),
                 category
             );
-            set.add_category(category);
+            set.add(category);
         }
         assert_eq!(all_categories, set);
     }
