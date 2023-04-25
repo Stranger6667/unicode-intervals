@@ -13,7 +13,7 @@ The main purpose of `unicode-intervals` is to simplify generating strings that m
 
 ```toml
 [dependencies]
-unicode-intervals = "0.1"
+unicode-intervals = "0.2"
 ```
 
 <br>
