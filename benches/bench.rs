@@ -79,47 +79,59 @@ fn query(c: &mut Criterion) {
         })
     });
     let exclude_categories = black_box(UnicodeCategory::Lu);
-    let min_codepoint = black_box(Some(0));
-    let max_codepoint = black_box(Some(128));
+    let min_codepoint = black_box(0);
+    let max_codepoint = black_box(128);
     c.bench_function("query - top level - only codepoints", |b| {
         b.iter(|| {
-            let _ = version.intervals(
-                None,
-                exclude_categories,
-                None,
-                None,
-                min_codepoint,
-                max_codepoint,
-            );
+            let _ = version
+                .query()
+                .exclude_categories(exclude_categories)
+                .min_codepoint(min_codepoint)
+                .max_codepoint(max_codepoint)
+                .intervals();
         })
     });
     c.bench_function("query - top level - exclude chars", |b| {
         b.iter(|| {
-            let _ = version.intervals(
-                None,
-                exclude_categories,
-                None,
-                black_box(Some("A@т")),
-                min_codepoint,
-                max_codepoint,
-            );
+            let _ = version
+                .query()
+                .exclude_categories(exclude_categories)
+                .exclude_characters(black_box("A@т"))
+                .min_codepoint(min_codepoint)
+                .max_codepoint(max_codepoint)
+                .intervals();
         })
     });
     c.bench_function("query - top level - include and exclude chars", |b| {
         b.iter(|| {
-            let _ = version.intervals(
-                None,
-                exclude_categories,
-                black_box(Some("0123456789")),
-                black_box(Some("QWERTYUIOP")),
-                min_codepoint,
-                max_codepoint,
-            );
+            let _ = version
+                .query()
+                .exclude_categories(exclude_categories)
+                .include_characters(black_box("0123456789"))
+                .exclude_characters(black_box("QWERTYUIOP"))
+                .min_codepoint(min_codepoint)
+                .max_codepoint(max_codepoint)
+                .intervals();
         })
     });
     c.bench_function("query - top level - include only", |b| {
         b.iter(|| {
-            let _ = version.intervals(UnicodeCategory::Ll, None, "ABC", None, 0, 50);
+            let _ = version
+                .query()
+                .include_categories(UnicodeCategory::Ll)
+                .include_characters("ABC")
+                .min_codepoint(0)
+                .max_codepoint(50)
+                .intervals();
+        })
+    });
+    c.bench_function("query - single category - codepoint range", |b| {
+        b.iter(|| {
+            let _ = version
+                .query()
+                .include_categories(black_box(UnicodeCategory::Lo))
+                .max_codepoint(black_box(0x1_0000))
+                .intervals();
         })
     });
     let interval_set = UnicodeVersion::V15_0_0

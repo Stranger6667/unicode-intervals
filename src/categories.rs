@@ -204,6 +204,44 @@ impl UnicodeCategory {
     /// Uppercase Letter (alias).
     pub const UPPERCASE_LETTER: UnicodeCategory = Lu;
 
+    /// Category for the given discriminant, or `None` if out of range.
+    #[must_use]
+    pub(crate) const fn from_index(index: u8) -> Option<UnicodeCategory> {
+        Some(match index {
+            0 => Pe,
+            1 => Pc,
+            2 => Cc,
+            3 => Sc,
+            4 => Pd,
+            5 => Nd,
+            6 => Me,
+            7 => Pf,
+            8 => Cf,
+            9 => Pi,
+            10 => Nl,
+            11 => Zl,
+            12 => Ll,
+            13 => Sm,
+            14 => Lm,
+            15 => Sk,
+            16 => Mn,
+            17 => Ps,
+            18 => Lo,
+            19 => No,
+            20 => Po,
+            21 => So,
+            22 => Zp,
+            23 => Co,
+            24 => Zs,
+            25 => Mc,
+            26 => Cs,
+            27 => Lt,
+            28 => Cn,
+            29 => Lu,
+            _ => return None,
+        })
+    }
+
     /// Abbreviation as a string.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -313,19 +351,19 @@ impl UnicodeCategorySet {
     }
     // `index` is always < 30 and can't overflow
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn set(&mut self, index: u8) {
         self.0 |= 1 << index;
     }
     // `index` is always < 30 and can't overflow
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     pub(crate) fn unset(&mut self, index: u8) {
         self.0 &= !(1 << index);
     }
     // `index`` is always < 30 and can't overflow
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     const fn is_set(self, index: u8) -> bool {
         self.0 & (1 << index) != 0
     }
@@ -340,7 +378,7 @@ impl Default for UnicodeCategorySet {
 
 impl fmt::Display for UnicodeCategorySet {
     // `idx` can't overflow as the maximum possible size of `iter` is 30 < usize::MAX
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let len = self.len();
         for (idx, category) in self.iter().enumerate() {
@@ -358,7 +396,7 @@ impl BitOr for UnicodeCategory {
 
     // `self` and `rhs` are both < 30; Therefore shift won't overflow
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     fn bitor(self, rhs: Self) -> Self::Output {
         UnicodeCategorySet(1 << self as u8 | 1 << rhs as u8)
     }
@@ -378,7 +416,7 @@ impl BitOr<UnicodeCategory> for UnicodeCategorySet {
 
     // `rhs as u8` can't overflow as it has only 30 elements
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     fn bitor(self, rhs: UnicodeCategory) -> Self::Output {
         Self(self.into_value() | 1 << rhs as u8)
     }
@@ -419,39 +457,7 @@ impl Iterator for Iter {
         // INVARIANT: The number of trailing zeros for `u32` is 32 at most which is less than `u8::MAX`
         #[allow(clippy::cast_possible_truncation)]
         let index = self.data.0.trailing_zeros() as u8;
-        let category = match index {
-            0 => Pe,
-            1 => Pc,
-            2 => Cc,
-            3 => Sc,
-            4 => Pd,
-            5 => Nd,
-            6 => Me,
-            7 => Pf,
-            8 => Cf,
-            9 => Pi,
-            10 => Nl,
-            11 => Zl,
-            12 => Ll,
-            13 => Sm,
-            14 => Lm,
-            15 => Sk,
-            16 => Mn,
-            17 => Ps,
-            18 => Lo,
-            19 => No,
-            20 => Po,
-            21 => So,
-            22 => Zp,
-            23 => Co,
-            24 => Zs,
-            25 => Mc,
-            26 => Cs,
-            27 => Lt,
-            28 => Cn,
-            29 => Lu,
-            _ => return None,
-        };
+        let category = UnicodeCategory::from_index(index)?;
         self.data.unset(index);
         Some(category)
     }
@@ -467,7 +473,7 @@ impl ExactSizeIterator for Iter {
 impl From<UnicodeCategory> for UnicodeCategorySet {
     // `category as u8` can't overflow as it has only 30 elements
     #[inline]
-    #[allow(clippy::integer_arithmetic)]
+    #[allow(clippy::arithmetic_side_effects)]
     fn from(category: UnicodeCategory) -> Self {
         Self::from_value_unchecked(1 << category as u8)
     }
@@ -525,7 +531,7 @@ mod tests {
     fn test_category_traits() {
         let mut hasher = DefaultHasher::new();
         Ll.hash(&mut hasher);
-        hasher.finish();
+        let _ = hasher.finish();
         let _ = Ll.clone();
         assert_eq!(format!("{Ll:?}"), "Ll");
     }
@@ -563,7 +569,7 @@ mod tests {
         let set = UnicodeCategory::L;
         let mut hasher = DefaultHasher::new();
         set.hash(&mut hasher);
-        hasher.finish();
+        let _ = hasher.finish();
         let _ = set.clone();
         assert_eq!(format!("{set:?}"), "UnicodeCategorySet(671371264)");
     }

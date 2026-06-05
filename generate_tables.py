@@ -41,7 +41,7 @@ CATEGORIES = {
 
 
 def fetch(unicode_version: str, directory: str) -> None:
-    response, _ = urllib.request.urlretrieve(f"https://www.unicode.org/Public/zipped/{unicode_version}/UCD.zip")
+    response, _ = urllib.request.urlretrieve(f"https://www.unicode.org/Public/{unicode_version}/ucd/UCD.zip")
     with zipfile.ZipFile(response, "r") as compressed:
         compressed.extractall(directory)
 

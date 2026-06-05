@@ -24,6 +24,10 @@ pub fn query(
     let exclude_intervals = intervals::from_str(exclude_characters);
 
     let full = intervals_for_set(version, categories);
+    // `full` is already sorted and non-overlapping unless it concatenates several category
+    // slices; the codepoint filter below preserves that order, so only the multi-category
+    // case needs a re-merge.
+    let needs_merge = categories.len() > 1 && categories.into_value() != ALL_CATEGORIES;
     // Depending on the codepoint range, it could be less work to do
     let mut intervals = match (min_codepoint, max_codepoint) {
         // Full range, no need to filter
@@ -65,7 +69,7 @@ pub fn query(
     } else if !include_intervals.is_empty() {
         intervals.extend_from_slice(&include_intervals);
         intervals::merge(&mut intervals);
-    } else {
+    } else if needs_merge {
         intervals::merge(&mut intervals);
     }
     // Exclude intervals

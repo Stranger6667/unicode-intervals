@@ -17,7 +17,7 @@ impl IntervalSet {
         offsets.reserve_exact(intervals.len());
         let mut size = 0;
         // INVARIANT: `right` is always `>= left`, hence no overflow
-        #[allow(clippy::integer_arithmetic)]
+        #[allow(clippy::arithmetic_side_effects)]
         for (left, right) in &intervals {
             size += *right - *left + 1;
             offsets.push(size);
@@ -39,7 +39,7 @@ impl IntervalSet {
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
-    /// assert_eq!(interval_set.len(), 1831);
+    /// assert_eq!(interval_set.len(), 1886);
     /// ```
     #[inline]
     #[must_use]
@@ -105,28 +105,12 @@ impl IntervalSet {
         if index >= self.size {
             return None;
         }
-        // INVARIANT: There is a positive number of intervals at this point per the check above
-        #[allow(clippy::integer_arithmetic)]
-        let mut current = self.intervals.len() - 1;
-        if self.offsets[current] > index {
-            let (mut high, mut low) = (current, 0_usize);
-            // INVARIANTS:
-            //   - `low + 1` never overflows as all possible values are far below `u32::MAX`
-            //   - `low + high` never overflows because two maximum values for these variables
-            //     are far below `u32::MAX`
-            #[allow(clippy::integer_arithmetic)]
-            while low + 1 < high {
-                let mid = (low + high) / 2;
-                if self.offsets[mid] <= index {
-                    low = mid;
-                } else {
-                    high = mid;
-                }
-            }
-            current = low;
-        }
-        // INVARIANT: `index` & offsets are small enough and won't cause overflow
-        #[allow(clippy::integer_arithmetic)]
+        // Last interval whose start offset is `<= index`. `offsets[0]` is always 0 and `index`
+        // is in range, so the partition point is at least 1 and the subtraction can't underflow.
+        #[allow(clippy::arithmetic_side_effects)]
+        let current = self.offsets.partition_point(|&offset| offset <= index) - 1;
+        // INVARIANT: `index >= offsets[current]` and values are small enough to not overflow.
+        #[allow(clippy::arithmetic_side_effects)]
         Some(self.intervals[current].0 + index - self.offsets[current])
     }
 
@@ -147,19 +131,23 @@ impl IntervalSet {
     #[must_use]
     pub fn index_of(&self, codepoint: impl Into<u32>) -> Option<u32> {
         let codepoint = codepoint.into();
-        for (offset, (left, right)) in self.offsets.iter().zip(self.intervals.iter()) {
-            if *left == codepoint {
-                return Some(*offset);
-            } else if *left > codepoint {
-                return None;
-            } else if codepoint <= *right {
-                // INVARIANT: `left` is smaller than `codepoint` and `offset` is small enough,
-                // so there is no overflow
-                #[allow(clippy::integer_arithmetic)]
-                return Some(*offset + (codepoint - left));
-            }
+        // Last interval whose left bound is `<= codepoint`.
+        let idx = self
+            .intervals
+            .partition_point(|&(left, _)| left <= codepoint);
+        if idx == 0 {
+            return None;
         }
-        None
+        // INVARIANT: `idx >= 1` per the check above.
+        #[allow(clippy::arithmetic_side_effects)]
+        let (left, right) = self.intervals[idx - 1];
+        if codepoint <= right {
+            // INVARIANT: `left <= codepoint` and offsets are small enough to not overflow.
+            #[allow(clippy::arithmetic_side_effects)]
+            Some(self.offsets[idx - 1] + (codepoint - left))
+        } else {
+            None
+        }
     }
 
     /// Returns the index of a specific codepoint in the `IntervalSet` if it is present in the set,
@@ -182,17 +170,23 @@ impl IntervalSet {
     #[must_use]
     pub fn index_above(&self, codepoint: impl Into<u32>) -> u32 {
         let codepoint = codepoint.into();
-        for (offset, (left, right)) in self.offsets.iter().zip(self.intervals.iter()) {
-            if *left >= codepoint {
-                return *offset;
-            } else if codepoint <= *right {
-                // INVARIANT: `left` is smaller than `codepoint` and `offset` is small enough,
-                // so there is no overflow
-                #[allow(clippy::integer_arithmetic)]
-                return *offset + (codepoint - left);
+        // Last interval whose left bound is `<= codepoint`.
+        let idx = self
+            .intervals
+            .partition_point(|&(left, _)| left <= codepoint);
+        if idx > 0 {
+            // INVARIANT: `idx >= 1` per the check above.
+            #[allow(clippy::arithmetic_side_effects)]
+            let (left, right) = self.intervals[idx - 1];
+            if codepoint <= right {
+                // INVARIANT: `left <= codepoint` and offsets are small enough to not overflow.
+                #[allow(clippy::arithmetic_side_effects)]
+                return self.offsets[idx - 1] + (codepoint - left);
             }
         }
-        self.size
+        // `codepoint` falls in a gap (or after the last interval): the next codepoint is the
+        // start of interval `idx`, whose index is `offsets[idx]` (== `size` when `idx == len`).
+        self.offsets[idx]
     }
 
     /// Returns an iterator over all codepoints in all contained intervals.
@@ -212,10 +206,50 @@ impl IntervalSet {
     /// assert_eq!(iterator.next(), Some('C' as u32));
     /// assert_eq!(iterator.next(), None);
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = u32> + DoubleEndedIterator + '_ {
-        self.intervals
-            .iter()
-            .flat_map(|(left, right)| *left..=*right)
+    pub fn iter(&self) -> Codepoints<'_> {
+        fn expand((left, right): Interval) -> core::ops::RangeInclusive<u32> {
+            left..=right
+        }
+        let expand: Expand = expand;
+        Codepoints(self.intervals.iter().copied().flat_map(expand))
+    }
+}
+
+type Expand = fn(Interval) -> core::ops::RangeInclusive<u32>;
+
+/// Iterator over the codepoints of an [`IntervalSet`].
+#[derive(Debug, Clone)]
+pub struct Codepoints<'a>(
+    core::iter::FlatMap<
+        core::iter::Copied<core::slice::Iter<'a, Interval>>,
+        core::ops::RangeInclusive<u32>,
+        Expand,
+    >,
+);
+
+impl Iterator for Codepoints<'_> {
+    type Item = u32;
+
+    #[inline]
+    fn next(&mut self) -> Option<u32> {
+        self.0.next()
+    }
+}
+
+impl DoubleEndedIterator for Codepoints<'_> {
+    #[inline]
+    fn next_back(&mut self) -> Option<u32> {
+        self.0.next_back()
+    }
+}
+
+impl<'a> IntoIterator for &'a IntervalSet {
+    type Item = u32;
+    type IntoIter = Codepoints<'a>;
+
+    #[inline]
+    fn into_iter(self) -> Codepoints<'a> {
+        self.iter()
     }
 }
 
@@ -225,8 +259,12 @@ mod tests {
     use crate::{UnicodeCategory, UnicodeVersion};
     use test_case::test_case;
 
+    // Pinned to a fixed Unicode version so the expected indices/counts below stay
+    // deterministic across Unicode upgrades; these tests exercise `IntervalSet`
+    // mechanics, not the latest Unicode data.
     fn uppercase_letters() -> IntervalSet {
-        crate::query()
+        UnicodeVersion::V15_0_0
+            .query()
             .include_categories(UnicodeCategory::UPPERCASE_LETTER)
             .interval_set()
             .expect("Invalid query input")
@@ -282,6 +320,58 @@ mod tests {
         assert!(interval_set.codepoint_at(0).is_none());
     }
 
+    // Oracle: compare every lookup method against a flattened reference over a set
+    // with single-element intervals, multi-element intervals, and gaps between them.
+    #[test]
+    fn test_lookups_against_oracle() {
+        let intervals = vec![(1, 3), (10, 12), (20, 20), (100, 200)];
+        let set = IntervalSet::new(intervals.clone());
+        // Reference: every codepoint paired with its index, in order.
+        let flat: Vec<u32> = intervals
+            .iter()
+            .flat_map(|(left, right)| *left..=*right)
+            .collect();
+        let total = u32::try_from(flat.len()).expect("fits in u32");
+
+        // codepoint_at over every valid index, plus past the end.
+        for (index, expected) in (0u32..).zip(flat.iter()) {
+            assert_eq!(
+                set.codepoint_at(index),
+                Some(*expected),
+                "codepoint_at({index})"
+            );
+        }
+        assert_eq!(set.codepoint_at(total), None);
+
+        // index_of / contains / index_above over the full codepoint span and beyond.
+        for codepoint in 0..=210_u32 {
+            let expected_index = (0u32..)
+                .zip(flat.iter())
+                .find(|(_, &c)| c == codepoint)
+                .map(|(index, _)| index);
+            assert_eq!(
+                set.index_of(codepoint),
+                expected_index,
+                "index_of({codepoint})"
+            );
+            assert_eq!(
+                set.contains(codepoint),
+                expected_index.is_some(),
+                "contains({codepoint})"
+            );
+            // Index of the first codepoint `>= codepoint`, or `total` if none.
+            let expected_above = (0u32..)
+                .zip(flat.iter())
+                .find(|(_, &c)| c >= codepoint)
+                .map_or(total, |(index, _)| index);
+            assert_eq!(
+                set.index_above(codepoint),
+                expected_above,
+                "index_above({codepoint})"
+            );
+        }
+    }
+
     #[test_case('K' as u32, Some(10); "Look from left")]
     #[test_case('Á' as u32, Some(27); "Look from right")]
     #[test_case(125184, Some(1797))]
@@ -317,6 +407,18 @@ mod tests {
         let interval_set = uppercase_letters();
         let mut iter = interval_set.iter().rev();
         assert_eq!(iter.next(), Some(125217));
+    }
+
+    #[test]
+    fn test_into_iterator_for_ref() {
+        let interval_set = IntervalSet::new(vec![(65, 67), (70, 70)]);
+        let collected: Vec<u32> = (&interval_set).into_iter().collect();
+        assert_eq!(collected, vec![65, 66, 67, 70]);
+        let mut via_for_loop = Vec::new();
+        for codepoint in &interval_set {
+            via_for_loop.push(codepoint);
+        }
+        assert_eq!(via_for_loop, vec![65, 66, 67, 70]);
     }
 
     #[test]

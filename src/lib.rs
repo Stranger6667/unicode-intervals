@@ -83,7 +83,7 @@
 //!
 //! # Unicode version support
 //!
-//! `unicode-intervals` supports Unicode 9.0.0 - 15.0.0.
+//! `unicode-intervals` supports Unicode 9.0.0 - 17.0.0.
 #![warn(
     clippy::cast_possible_truncation,
     clippy::doc_markdown,
@@ -102,7 +102,7 @@
     unused_extern_crates,
     unused_import_braces,
     variant_size_differences,
-    clippy::integer_arithmetic,
+    clippy::arithmetic_side_effects,
     clippy::unwrap_used,
     clippy::semicolon_if_nothing_returned,
     clippy::cargo
@@ -122,7 +122,7 @@ mod tables;
 pub use crate::{
     categories::{UnicodeCategory, UnicodeCategorySet},
     error::Error,
-    intervalset::IntervalSet,
+    intervalset::{Codepoints, IntervalSet},
 };
 
 #[cfg(feature = "__benchmark_internals")]
@@ -149,6 +149,7 @@ pub type Interval = (u32, u32);
 
 /// Supported Unicode versions.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum UnicodeVersion {
     /// Unicode 9.0.0
     V9_0_0,
@@ -166,6 +167,12 @@ pub enum UnicodeVersion {
     V14_0_0,
     /// Unicode 15.0.0
     V15_0_0,
+    /// Unicode 15.1.0
+    V15_1_0,
+    /// Unicode 16.0.0
+    V16_0_0,
+    /// Unicode 17.0.0
+    V17_0_0,
 }
 
 impl fmt::Display for UnicodeVersion {
@@ -187,6 +194,9 @@ impl FromStr for UnicodeVersion {
             "13.0.0" => Ok(UnicodeVersion::V13_0_0),
             "14.0.0" => Ok(UnicodeVersion::V14_0_0),
             "15.0.0" => Ok(UnicodeVersion::V15_0_0),
+            "15.1.0" => Ok(UnicodeVersion::V15_1_0),
+            "16.0.0" => Ok(UnicodeVersion::V16_0_0),
+            "17.0.0" => Ok(UnicodeVersion::V17_0_0),
             _ => Err(Error::InvalidVersion(s.to_string().into_boxed_str())),
         }
     }
@@ -205,12 +215,15 @@ impl UnicodeVersion {
             UnicodeVersion::V13_0_0 => "13.0.0",
             UnicodeVersion::V14_0_0 => "14.0.0",
             UnicodeVersion::V15_0_0 => "15.0.0",
+            UnicodeVersion::V15_1_0 => "15.1.0",
+            UnicodeVersion::V16_0_0 => "16.0.0",
+            UnicodeVersion::V17_0_0 => "17.0.0",
         }
     }
     /// Get the latest Unicode version.
     #[must_use]
     pub const fn latest() -> UnicodeVersion {
-        UnicodeVersion::V15_0_0
+        UnicodeVersion::V17_0_0
     }
     /// A sorted slice of slices where each item is a slice of intervals for every Unicode category.
     /// They are sorted alphabetically by their full name.
@@ -226,6 +239,9 @@ impl UnicodeVersion {
             UnicodeVersion::V13_0_0 => tables::v13_0_0::BY_NAME,
             UnicodeVersion::V14_0_0 => tables::v14_0_0::BY_NAME,
             UnicodeVersion::V15_0_0 => tables::v15_0_0::BY_NAME,
+            UnicodeVersion::V15_1_0 => tables::v15_1_0::BY_NAME,
+            UnicodeVersion::V16_0_0 => tables::v16_0_0::BY_NAME,
+            UnicodeVersion::V17_0_0 => tables::v17_0_0::BY_NAME,
         }
     }
 
@@ -240,56 +256,24 @@ impl UnicodeVersion {
     #[inline]
     #[must_use]
     pub const fn normalized_categories(self) -> [UnicodeCategory; 30] {
-        // Collect all categories & their lengths
+        // Pair each category with its number of intervals.
         let mut lengths: [(UnicodeCategory, usize); 30] = [(UnicodeCategory::Cc, 0); 30];
-        let mut idx = 0;
         let table = self.table();
-        let categories = [
-            UnicodeCategory::Pe,
-            UnicodeCategory::Pc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Sc,
-            UnicodeCategory::Pd,
-            UnicodeCategory::Nd,
-            UnicodeCategory::Me,
-            UnicodeCategory::Pf,
-            UnicodeCategory::Cf,
-            UnicodeCategory::Pi,
-            UnicodeCategory::Nl,
-            UnicodeCategory::Zl,
-            UnicodeCategory::Ll,
-            UnicodeCategory::Sm,
-            UnicodeCategory::Lm,
-            UnicodeCategory::Sk,
-            UnicodeCategory::Mn,
-            UnicodeCategory::Ps,
-            UnicodeCategory::Lo,
-            UnicodeCategory::No,
-            UnicodeCategory::Po,
-            UnicodeCategory::So,
-            UnicodeCategory::Zp,
-            UnicodeCategory::Co,
-            UnicodeCategory::Zs,
-            UnicodeCategory::Mc,
-            UnicodeCategory::Cs,
-            UnicodeCategory::Lt,
-            UnicodeCategory::Cn,
-            UnicodeCategory::Lu,
-        ];
-        // `idx` is always less than 30 and will not overflow
-        #[allow(clippy::integer_arithmetic)]
+        let mut idx = 0;
+        // `idx` stays below 30, so the cast and increment can't overflow.
+        #[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
         while idx < table.len() {
-            lengths[idx] = (categories[idx], table[idx].len());
+            if let Some(category) = UnicodeCategory::from_index(idx as u8) {
+                lengths[idx] = (category, table[idx].len());
+            }
             idx += 1;
         }
-        // Bubble sort by length.
-        // The main reason to use bubble sort is that it works in the `const` context
-
+        // Bubble sort by length (stable for equal lengths, and works in a `const` context).
         loop {
             let mut swapped = false;
             let mut idx = 1;
             // Arithmetic here will not overflow as it is always less than 30 and more than 1
-            #[allow(clippy::integer_arithmetic)]
+            #[allow(clippy::arithmetic_side_effects)]
             while idx < lengths.len() {
                 if lengths[idx - 1].1 > lengths[idx].1 {
                     let left = lengths[idx - 1];
@@ -305,55 +289,23 @@ impl UnicodeVersion {
             }
         }
 
-        // Fill only categories & skip Cc & Cs
-        let mut output: [UnicodeCategory; 30] = [
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cc,
-            UnicodeCategory::Cs,
-        ];
+        // Collect the sorted categories, forcing Cc (control) and Cs (surrogate) to the very
+        // end regardless of size. `output[28]` keeps its `Cc` default; `output[29]` is `Cs`.
+        let mut output = [UnicodeCategory::Cc; 30];
+        output[29] = UnicodeCategory::Cs;
         let mut idx = 0;
         let mut ptr = 0;
-
+        // `idx` and `ptr` stay below 30, so the increments can't overflow.
+        #[allow(clippy::arithmetic_side_effects)]
         while idx < lengths.len() {
             let (category, _) = lengths[idx];
-            // `idx` & `ptr` are always less than 30 and will not overflow
-            #[allow(clippy::integer_arithmetic)]
-            if category as u8 == UnicodeCategory::Cc as u8
-                || category as u8 == UnicodeCategory::Cs as u8
+            if category as u8 != UnicodeCategory::Cc as u8
+                && category as u8 != UnicodeCategory::Cs as u8
             {
-                idx += 1;
-            } else {
                 output[ptr] = category;
                 ptr += 1;
-                idx += 1;
             }
+            idx += 1;
         }
         output
     }
@@ -363,36 +315,6 @@ impl UnicodeVersion {
     #[inline]
     pub fn query<'a>(self) -> IntervalQuery<'a> {
         IntervalQuery::new(self)
-    }
-
-    /// Find intervals matching the query.
-    ///
-    /// # Errors
-    ///
-    ///   - `min_codepoint > max_codepoint`
-    ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
-    pub fn intervals<'a>(
-        self,
-        include_categories: impl Into<Option<UnicodeCategorySet>>,
-        exclude_categories: impl Into<Option<UnicodeCategorySet>>,
-        include_characters: impl Into<Option<&'a str>>,
-        exclude_characters: impl Into<Option<&'a str>>,
-        min_codepoint: impl Into<Option<u32>>,
-        max_codepoint: impl Into<Option<u32>>,
-    ) -> Result<Vec<Interval>, Error> {
-        let exclude_categories: UnicodeCategorySet = exclude_categories
-            .into()
-            .unwrap_or_else(UnicodeCategorySet::new);
-        let min_codepoint = min_codepoint.into().unwrap_or(0);
-        let max_codepoint = max_codepoint.into().unwrap_or(MAX_CODEPOINT);
-        self.intervals_impl(
-            include_categories.into(),
-            exclude_categories,
-            include_characters.into(),
-            exclude_characters.into(),
-            min_codepoint,
-            max_codepoint,
-        )
     }
 
     fn intervals_impl(
@@ -420,38 +342,9 @@ impl UnicodeVersion {
             max_codepoint,
         ))
     }
-
-    /// Build an `IndexSet` for the intervals matching the query.
-    ///
-    /// # Errors
-    ///
-    ///   - `min_codepoint > max_codepoint`
-    ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
-    pub fn interval_set<'a>(
-        self,
-        include_categories: impl Into<Option<UnicodeCategorySet>>,
-        exclude_categories: impl Into<Option<UnicodeCategorySet>>,
-        include_characters: impl Into<Option<&'a str>>,
-        exclude_characters: impl Into<Option<&'a str>>,
-        min_codepoint: impl Into<Option<u32>>,
-        max_codepoint: impl Into<Option<u32>>,
-    ) -> Result<IntervalSet, Error> {
-        let intervals = self.intervals(
-            include_categories,
-            exclude_categories,
-            include_characters,
-            exclude_characters,
-            min_codepoint,
-            max_codepoint,
-        )?;
-        Ok(IntervalSet::new(intervals))
-    }
 }
 
-/// A Query builder for specifying the input parameters to the `intervals()` method in `UnicodeVersion`.
-///
-/// The builder allows for a more convenient and readable way to specify the input parameters,
-/// instead of relying on multiple function arguments.
+/// A builder for querying Unicode intervals.
 ///
 /// # Examples
 ///
@@ -538,9 +431,10 @@ impl<'a> IntervalQuery<'a> {
     ///   - `min_codepoint > max_codepoint`
     ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
     pub fn intervals(&self) -> Result<Vec<Interval>, Error> {
-        self.version.intervals(
+        let exclude_categories = self.exclude_categories.unwrap_or_default();
+        self.version.intervals_impl(
             self.include_categories,
-            self.exclude_categories,
+            exclude_categories,
             self.include_characters,
             self.exclude_characters,
             self.min_codepoint,
@@ -554,14 +448,7 @@ impl<'a> IntervalQuery<'a> {
     ///   - `min_codepoint > max_codepoint`
     ///   - `min_codepoint > 1114111` or `max_codepoint > 1114111`
     pub fn interval_set(&self) -> Result<IntervalSet, Error> {
-        self.version.interval_set(
-            self.include_categories,
-            self.exclude_categories,
-            self.include_characters,
-            self.exclude_characters,
-            self.min_codepoint,
-            self.max_codepoint,
-        )
+        Ok(IntervalSet::new(self.intervals()?))
     }
 }
 
@@ -590,23 +477,26 @@ mod tests {
         max_codepoint: Option<u32>,
         expected: &[Interval],
     ) {
-        let intervals = UnicodeVersion::V15_0_0
-            .intervals(
-                UnicodeCategory::Pc,
-                None,
-                None,
-                None,
-                min_codepoint,
-                max_codepoint,
-            )
-            .expect("Invalid query");
+        let mut query = UnicodeVersion::V15_0_0
+            .query()
+            .include_categories(UnicodeCategory::Pc);
+        if let Some(min) = min_codepoint {
+            query = query.min_codepoint(min);
+        }
+        if let Some(max) = max_codepoint {
+            query = query.max_codepoint(max);
+        }
+        let intervals = query.intervals().expect("Invalid query");
         assert_eq!(intervals, expected);
     }
 
     #[test]
     fn test_interval_set() {
         let interval_set = UnicodeVersion::V15_0_0
-            .interval_set(UnicodeCategory::Lu, None, None, None, None, 128)
+            .query()
+            .include_categories(UnicodeCategory::Lu)
+            .max_codepoint(128)
+            .interval_set()
             .expect("Invalid query");
         assert_eq!(interval_set.index_of('A'), Some(0));
     }
@@ -656,9 +546,25 @@ mod tests {
     }
 
     #[test]
+    fn test_multi_category_codepoint_range_is_sorted() {
+        // `Ll` (a-z) and `Lu` (A-Z) concatenate out of iteration order before merging,
+        // so the result must still come back sorted and non-overlapping.
+        let intervals = UnicodeVersion::V15_0_0
+            .query()
+            .include_categories(UnicodeCategory::Lu | UnicodeCategory::Ll)
+            .max_codepoint(128)
+            .intervals()
+            .expect("Invalid query");
+        assert_eq!(intervals, &[(65, 90), (97, 122)]);
+    }
+
+    #[test]
     fn test_query_include_category_and_characters() {
         let intervals = UnicodeVersion::V15_0_0
-            .intervals(UnicodeCategory::Pc, None, "abc", None, None, None)
+            .query()
+            .include_categories(UnicodeCategory::Pc)
+            .include_characters("abc")
+            .intervals()
             .expect("Invalid query");
         assert_eq!(
             intervals,
@@ -768,6 +674,9 @@ mod tests {
     #[test_case(UnicodeVersion::V13_0_0)]
     #[test_case(UnicodeVersion::V14_0_0)]
     #[test_case(UnicodeVersion::V15_0_0)]
+    #[test_case(UnicodeVersion::V15_1_0)]
+    #[test_case(UnicodeVersion::V16_0_0)]
+    #[test_case(UnicodeVersion::V17_0_0)]
     fn test_successive_union(version: UnicodeVersion) {
         let mut x = vec![];
         for v in version.table() {
@@ -785,6 +694,9 @@ mod tests {
     #[test_case(UnicodeVersion::V13_0_0, "13.0.0")]
     #[test_case(UnicodeVersion::V14_0_0, "14.0.0")]
     #[test_case(UnicodeVersion::V15_0_0, "15.0.0")]
+    #[test_case(UnicodeVersion::V15_1_0, "15.1.0")]
+    #[test_case(UnicodeVersion::V16_0_0, "16.0.0")]
+    #[test_case(UnicodeVersion::V17_0_0, "17.0.0")]
     fn test_display(version: UnicodeVersion, expected: &str) {
         let string = version.to_string();
         assert_eq!(string, expected);
@@ -802,6 +714,9 @@ mod tests {
     #[test_case("13.0.0", UnicodeVersion::V13_0_0)]
     #[test_case("14.0.0", UnicodeVersion::V14_0_0)]
     #[test_case("15.0.0", UnicodeVersion::V15_0_0)]
+    #[test_case("15.1.0", UnicodeVersion::V15_1_0)]
+    #[test_case("16.0.0", UnicodeVersion::V16_0_0)]
+    #[test_case("17.0.0", UnicodeVersion::V17_0_0)]
     fn test_version_from_str(version: &str, expected: UnicodeVersion) {
         assert_eq!(
             UnicodeVersion::from_str(version).expect("Invalid version"),
@@ -825,7 +740,7 @@ mod tests {
         let version = UnicodeVersion::V15_0_0;
         let mut hasher = DefaultHasher::new();
         version.hash(&mut hasher);
-        hasher.finish();
+        let _ = hasher.finish();
         let _ = version.clone();
         assert_eq!(format!("{version:?}"), "V15_0_0");
     }
