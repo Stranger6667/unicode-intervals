@@ -507,9 +507,41 @@ pub const fn merge(
     }
 }
 
+/// Expand major-class designations (e.g. `"N"` -> `Nd, Nl, No`) and validate
+/// specific categories, returned in `normalized_categories` order.
+///
+/// # Errors
+///
+/// Returns an error if an entry is neither a major class nor a known category.
+pub fn as_general_categories(
+    categories: &[&str],
+    version: crate::UnicodeVersion,
+) -> Result<Vec<UnicodeCategory>, error::Error> {
+    let mut wanted = UnicodeCategorySet::new();
+    for category in categories {
+        let set = match *category {
+            "L" => UnicodeCategory::L,
+            "M" => UnicodeCategory::M,
+            "N" => UnicodeCategory::N,
+            "P" => UnicodeCategory::P,
+            "S" => UnicodeCategory::S,
+            "Z" => UnicodeCategory::Z,
+            "C" => UnicodeCategory::C,
+            other => other.parse::<UnicodeCategory>()?.into(),
+        };
+        wanted |= set;
+    }
+    Ok(version
+        .normalized_categories()
+        .into_iter()
+        .filter(|c| wanted.contains(*c))
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UnicodeVersion;
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
@@ -638,5 +670,17 @@ mod tests {
         expected: UnicodeCategorySet,
     ) {
         assert_eq!(merge(include, exclude), expected);
+    }
+
+    #[test]
+    fn test_as_general_categories() {
+        let v = UnicodeVersion::V15_0_0;
+        let n = as_general_categories(&["N"], v).expect("valid");
+        assert_eq!(n.len(), 3);
+        assert!(n.contains(&Nd) && n.contains(&Nl) && n.contains(&No));
+        let got = as_general_categories(&["Lu", "Ll"], v).expect("valid");
+        assert_eq!(got.len(), 2);
+        assert!(got.contains(&Lu) && got.contains(&Ll));
+        assert!(as_general_categories(&["Xx"], v).is_err());
     }
 }

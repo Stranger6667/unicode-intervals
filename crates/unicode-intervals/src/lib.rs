@@ -120,7 +120,7 @@ mod intervalset;
 mod query;
 mod tables;
 pub use crate::{
-    categories::{UnicodeCategory, UnicodeCategorySet},
+    categories::{as_general_categories, UnicodeCategory, UnicodeCategorySet},
     error::Error,
     intervalset::{Codepoints, IntervalSet},
 };
@@ -203,6 +203,20 @@ impl FromStr for UnicodeVersion {
 }
 
 impl UnicodeVersion {
+    /// Every bundled Unicode version, oldest to newest.
+    pub const ALL: [UnicodeVersion; 11] = [
+        UnicodeVersion::V9_0_0,
+        UnicodeVersion::V10_0_0,
+        UnicodeVersion::V11_0_0,
+        UnicodeVersion::V12_0_0,
+        UnicodeVersion::V12_1_0,
+        UnicodeVersion::V13_0_0,
+        UnicodeVersion::V14_0_0,
+        UnicodeVersion::V15_0_0,
+        UnicodeVersion::V15_1_0,
+        UnicodeVersion::V16_0_0,
+        UnicodeVersion::V17_0_0,
+    ];
     /// Unicode version as a string.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -467,6 +481,19 @@ mod tests {
         hash::{Hash, Hasher},
     };
     use test_case::test_case;
+
+    #[test]
+    fn test_all_versions() {
+        assert_eq!(UnicodeVersion::ALL.len(), 11);
+        assert_eq!(UnicodeVersion::ALL[0], UnicodeVersion::V9_0_0);
+        assert_eq!(
+            *UnicodeVersion::ALL.last().expect("non-empty"),
+            UnicodeVersion::latest()
+        );
+        for v in UnicodeVersion::ALL {
+            assert_eq!(v.as_str().parse::<UnicodeVersion>().expect("round-trip"), v);
+        }
+    }
 
     #[test_case(None, None, &[(95, 95), (8255, 8256), (8276, 8276), (65075, 65076), (65101, 65103), (65343, 65343)])]
     #[test_case(None, Some(128), &[(95, 95)])]
