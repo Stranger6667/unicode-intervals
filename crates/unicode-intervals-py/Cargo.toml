@@ -1,0 +1,25 @@
+[package]
+name = "unicode-intervals-py"
+version = "0.2.0"
+description = "Search Unicode code point intervals by category, range, and characters"
+readme = "README.md"
+keywords = ["unicode", "codepoint", "interval"]
+categories = ["text-processing", "internationalization"]
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[lib]
+name = "unicode_intervals"
+crate-type = ["cdylib"]
+
+[dependencies]
+unicode_intervals_core = { package = "unicode-intervals", path = "../unicode-intervals" }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
+pyo3-built = "0.6"
+
+[build-dependencies]
+built = { version = "=0.8.0", features = ["cargo-lock", "chrono"] }
+pyo3-build-config = { version = "0.28", features = ["resolve-config"] }

@@ -1,0 +1,4 @@
+# The Python binding crate is exercised by its pytest suite, not by `cargo llvm-cov`,
+# so its Rust source is excluded from coverage reporting.
+ignore:
+  - "crates/unicode-intervals-py"

@@ -1,0 +1,8 @@
+/.venv*
+/dist
+*.so
+*.whl
+__pycache__/
+.pytest_cache/
+.hypothesis/
+.ruff_cache/

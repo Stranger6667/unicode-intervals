@@ -242,6 +242,43 @@ impl UnicodeCategory {
         })
     }
 
+    /// Rank of the category abbreviation in alphabetical order (`Cc` = 0, ..., `Zs` = 29).
+    #[must_use]
+    pub(crate) const fn abbrev_rank(self) -> u8 {
+        match self {
+            Cc => 0,
+            Cf => 1,
+            Cn => 2,
+            Co => 3,
+            Cs => 4,
+            Ll => 5,
+            Lm => 6,
+            Lo => 7,
+            Lt => 8,
+            Lu => 9,
+            Mc => 10,
+            Me => 11,
+            Mn => 12,
+            Nd => 13,
+            Nl => 14,
+            No => 15,
+            Pc => 16,
+            Pd => 17,
+            Pe => 18,
+            Pf => 19,
+            Pi => 20,
+            Po => 21,
+            Ps => 22,
+            Sc => 23,
+            Sk => 24,
+            Sm => 25,
+            So => 26,
+            Zl => 27,
+            Zp => 28,
+            Zs => 29,
+        }
+    }
+
     /// Abbreviation as a string.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -513,13 +550,17 @@ pub const fn merge(
 /// # Errors
 ///
 /// Returns an error if an entry is neither a major class nor a known category.
-pub fn as_general_categories(
-    categories: &[&str],
+pub fn as_general_categories<I, S>(
+    categories: I,
     version: crate::UnicodeVersion,
-) -> Result<Vec<UnicodeCategory>, error::Error> {
+) -> Result<Vec<UnicodeCategory>, error::Error>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let mut wanted = UnicodeCategorySet::new();
     for category in categories {
-        let set = match *category {
+        let set = match category.as_ref() {
             "L" => UnicodeCategory::L,
             "M" => UnicodeCategory::M,
             "N" => UnicodeCategory::N,
@@ -675,12 +716,12 @@ mod tests {
     #[test]
     fn test_as_general_categories() {
         let v = UnicodeVersion::V15_0_0;
-        let n = as_general_categories(&["N"], v).expect("valid");
+        let n = as_general_categories(["N"], v).expect("valid");
         assert_eq!(n.len(), 3);
         assert!(n.contains(&Nd) && n.contains(&Nl) && n.contains(&No));
-        let got = as_general_categories(&["Lu", "Ll"], v).expect("valid");
+        let got = as_general_categories(["Lu", "Ll"], v).expect("valid");
         assert_eq!(got.len(), 2);
         assert!(got.contains(&Lu) && got.contains(&Ll));
-        assert!(as_general_categories(&["Xx"], v).is_err());
+        assert!(as_general_categories(["Xx"], v).is_err());
     }
 }
