@@ -6,6 +6,8 @@
 
 - Support for Unicode 15.1.0, 16.0.0, and 17.0.0.
 - `IntoIterator` for `&IntervalSet`, exposed via the new `Codepoints` iterator type.
+- `as_general_categories` to expand major category classes (e.g. `N` -> `Nd, Nl, No`) and validate category names.
+- `UnicodeVersion::ALL` listing every bundled Unicode version.
 
 ### Changed
 
