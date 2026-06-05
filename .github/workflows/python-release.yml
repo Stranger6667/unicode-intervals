@@ -1,0 +1,332 @@
+name: Python Release
+
+on:
+  push:
+    tags:
+      - python-v*
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PACKAGE_NAME: unicode_intervals
+  MANIFEST: crates/unicode-intervals-py/Cargo.toml
+  # Single abi3 wheel per platform covers CPython 3.10+
+  PYTHON_ABI_VERSION: "3.10"
+  PYPY_VERSION: "pypy3.11"
+  PYODIDE_RUST_TOOLCHAIN: "nightly-2025-02-01"
+
+jobs:
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build --sdist --out-dir dist crates/unicode-intervals-py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+  macos:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        include:
+          - target: x86_64
+            artifact: wheel-macos-x86_64
+          - target: universal2-apple-darwin
+            artifact: wheel-macos-universal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install ${{ env.PYTHON_ABI_VERSION }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+  windows:
+    runs-on: windows-2025
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_ABI_VERSION }}
+          architecture: ${{ matrix.target }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows-${{ matrix.target }}
+          path: dist
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - target: x86_64
+            manylinux: auto
+          - target: i686
+            manylinux: auto
+          - target: aarch64
+            manylinux: 2_28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-${{ matrix.target }}
+          path: dist
+
+  linux-musllinux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: musllinux_1_2
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-musllinux-${{ matrix.target }}
+          path: dist
+
+  linux-freethreaded:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - target: x86_64
+            manylinux: auto
+          - target: aarch64
+            manylinux: 2_28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-freethreaded-${{ matrix.target }}
+          path: dist
+
+  linux-musllinux-freethreaded:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: musllinux_1_2
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linux-musllinux-freethreaded-${{ matrix.target }}
+          path: dist
+
+  macos-freethreaded:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.13t 3.14t
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-macos-freethreaded-${{ matrix.target }}
+          path: dist
+
+  windows-freethreaded:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: |
+          uv python install 3.13t
+          uv python install 3.14t
+      - id: python-paths
+        run: |
+          echo "py313t=$(uv python find 3.13t)" >> "$GITHUB_OUTPUT"
+          echo "py314t=$(uv python find 3.14t)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: messense/maturin-action@v1
+        with:
+          target: x64
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ steps.python-paths.outputs.py313t }} ${{ steps.python-paths.outputs.py314t }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-windows-freethreaded
+          path: dist
+
+  pypy:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64
+            artifact: wheel-macos-pypy
+            manylinux: ''
+          - os: windows-2025
+            target: x64
+            artifact: wheel-windows-pypy
+            manylinux: ''
+          - os: ubuntu-24.04
+            target: x86_64
+            artifact: wheel-linux-pypy
+            manylinux: auto
+          - os: ubuntu-24.04
+            target: aarch64
+            artifact: wheel-linux-pypy-aarch64
+            manylinux: 2_28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYPY_VERSION }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build wheels - PyPy (manylinux)
+        if: ${{ matrix.manylinux != '' }}
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYPY_VERSION }}
+      - name: Build wheels - PyPy
+        if: ${{ matrix.manylinux == '' }}
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYPY_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+  pyodide:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
+          components: rust-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: |
+          pip install "pyodide-build>=0.28.0"
+          echo "EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)" >> "$GITHUB_ENV"
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+      - name: Install Pyodide Rust sysroot
+        run: |
+          toolchain_root=$(rustup run "${{ env.PYODIDE_RUST_TOOLCHAIN }}" rustc --print sysroot)
+          rustlib="$toolchain_root/lib/rustlib"
+          sysroot_tag="emcc-${EMSCRIPTEN_VERSION}_${{ env.PYODIDE_RUST_TOOLCHAIN }}"
+          curl -fsSL --retry 5 --retry-all-errors \
+            -o "/tmp/${sysroot_tag}.tar.bz2" \
+            "https://github.com/pyodide/rust-emscripten-wasm-eh-sysroot/releases/download/${sysroot_tag}/${sysroot_tag}.tar.bz2"
+          tar -xjf "/tmp/${sysroot_tag}.tar.bz2" --directory="$rustlib"
+      - run: pyodide build
+        working-directory: crates/unicode-intervals-py
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
+          RUSTFLAGS: "-C link-arg=-sSIDE_MODULE=2 -Z link-native-libraries=no -Z emscripten-wasm-eh"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-pyodide
+          if-no-files-found: error
+          path: crates/unicode-intervals-py/dist
+
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs:
+      - sdist
+      - macos
+      - windows
+      - linux
+      - linux-musllinux
+      - linux-freethreaded
+      - linux-musllinux-freethreaded
+      - macos-freethreaded
+      - windows-freethreaded
+      - pypy
+      - pyodide
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+      - name: Collect wheels (pyodide kept out of the PyPI set)
+        run: |
+          mkdir dist dist-pyodide
+          for dir in all/*/; do
+            if [[ "$dir" == *pyodide* ]]; then
+              cp "$dir"* dist-pyodide/
+            else
+              cp "$dir"* dist/
+            fi
+          done
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Extract version
+        run: echo "version=${GITHUB_REF#refs/tags/python-v}" >> "$GITHUB_ENV"
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          make_latest: false
+          draft: true
+          name: "[Python] Release ${{ env.version }}"
+          files: |
+            dist/*
+            dist-pyodide/*

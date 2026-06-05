@@ -270,30 +270,34 @@ impl UnicodeVersion {
     #[inline]
     #[must_use]
     pub const fn normalized_categories(self) -> [UnicodeCategory; 30] {
-        // Pair each category with its number of intervals.
-        let mut lengths: [(UnicodeCategory, usize); 30] = [(UnicodeCategory::Cc, 0); 30];
+        // Pair each category with a sort key: interval count, ties broken by abbreviation
+        // (rank < 30, so `count * 30 + rank` orders by count then abbreviation).
+        let mut keyed: [(UnicodeCategory, usize); 30] = [(UnicodeCategory::Cc, 0); 30];
         let table = self.table();
         let mut idx = 0;
         // `idx` stays below 30, so the cast and increment can't overflow.
         #[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
         while idx < table.len() {
             if let Some(category) = UnicodeCategory::from_index(idx as u8) {
-                lengths[idx] = (category, table[idx].len());
+                keyed[idx] = (
+                    category,
+                    table[idx].len() * 30 + category.abbrev_rank() as usize,
+                );
             }
             idx += 1;
         }
-        // Bubble sort by length (stable for equal lengths, and works in a `const` context).
+        // Bubble sort by key (stable, and works in a `const` context).
         loop {
             let mut swapped = false;
             let mut idx = 1;
             // Arithmetic here will not overflow as it is always less than 30 and more than 1
             #[allow(clippy::arithmetic_side_effects)]
-            while idx < lengths.len() {
-                if lengths[idx - 1].1 > lengths[idx].1 {
-                    let left = lengths[idx - 1];
-                    let right = lengths[idx];
-                    lengths[idx - 1] = right;
-                    lengths[idx] = left;
+            while idx < keyed.len() {
+                let (lcat, lkey) = keyed[idx - 1];
+                let (rcat, rkey) = keyed[idx];
+                if lkey > rkey {
+                    keyed[idx - 1] = (rcat, rkey);
+                    keyed[idx] = (lcat, lkey);
                     swapped = true;
                 }
                 idx += 1;
@@ -311,8 +315,8 @@ impl UnicodeVersion {
         let mut ptr = 0;
         // `idx` and `ptr` stay below 30, so the increments can't overflow.
         #[allow(clippy::arithmetic_side_effects)]
-        while idx < lengths.len() {
-            let (category, _) = lengths[idx];
+        while idx < keyed.len() {
+            let (category, _) = keyed[idx];
             if category as u8 != UnicodeCategory::Cc as u8
                 && category as u8 != UnicodeCategory::Cs as u8
             {
@@ -665,13 +669,13 @@ mod tests {
                 UnicodeCategory::Me,
                 UnicodeCategory::Pc,
                 UnicodeCategory::Zs,
-                UnicodeCategory::Pf,
                 UnicodeCategory::Lt,
+                UnicodeCategory::Pf,
                 UnicodeCategory::Pi,
                 UnicodeCategory::Nl,
                 UnicodeCategory::Pd,
-                UnicodeCategory::Sc,
                 UnicodeCategory::Cf,
+                UnicodeCategory::Sc,
                 UnicodeCategory::Sk,
                 UnicodeCategory::Nd,
                 UnicodeCategory::Sm,

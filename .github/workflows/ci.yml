@@ -28,8 +28,14 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - toolchain: "1.85.0"
             target: x86_64-unknown-linux-gnu
+            # The binding's pyo3 dep tree (icu_*, idna) needs rustc > 1.85; MSRV
+            # gates the core crate only.
+            exclude-py: --exclude unicode-intervals-py
           - toolchain: stable
             target: wasm32-wasip1
+            # pyo3 test bin imports the CPython C-API (e.g. env::_Py_DecRef), which
+            # wasmtime can't resolve; build/run only the core crate on wasm.
+            exclude-py: --exclude unicode-intervals-py
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +59,7 @@ jobs:
           VERSION: v28.0.0
           ARCH: x86_64-linux
 
-      - run: cargo test --all --no-fail-fast --target=${{ matrix.target }}
+      - run: cargo test --workspace ${{ matrix.exclude-py }} --no-fail-fast --target=${{ matrix.target }}
 
   test-coverage:
     name: Coverage
@@ -69,7 +75,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --all-features --workspace --exclude unicode-intervals-py --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
@@ -98,3 +104,60 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+
+  test-python:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', 'pypy3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v7
+      - run: uv python install ${{ matrix.python-version }}
+      - run: uvx --with=".[tests]" --python='${{ matrix.python-version }}' pytest tests-py
+        working-directory: crates/unicode-intervals-py
+
+  test-python-freethreaded:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python-version: ['3.13t', '3.14t']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v7
+      - run: uv python install ${{ matrix.python-version }}
+
+      - name: Find Python path (Windows)
+        if: runner.os == 'Windows'
+        id: python-path-windows
+        shell: bash
+        run: echo "path=$(uv python find ${{ matrix.python-version }})" >> "$GITHUB_OUTPUT"
+
+      - name: Build wheel (Windows)
+        if: runner.os == 'Windows'
+        uses: messense/maturin-action@v1
+        with:
+          args: --release -m crates/unicode-intervals-py/Cargo.toml --out crates/unicode-intervals-py/dist --interpreter ${{ steps.python-path-windows.outputs.path }}
+
+      - name: Build wheel (Unix)
+        if: runner.os != 'Windows'
+        uses: messense/maturin-action@v1
+        with:
+          args: --release -m crates/unicode-intervals-py/Cargo.toml --out crates/unicode-intervals-py/dist --interpreter ${{ matrix.python-version }}
+
+      - name: Test wheel
+        shell: bash
+        run: |
+          uv venv --python ${{ matrix.python-version }}
+          uv pip install crates/unicode-intervals-py/dist/*.whl
+          uv run --with pytest --with hypothesis pytest crates/unicode-intervals-py/tests-py
