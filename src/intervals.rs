@@ -111,6 +111,50 @@ mod tests {
         assert_eq!(subtract(left, right), expected);
     }
 
+    // Independent reference: flip per-codepoint membership, then coalesce.
+    fn subtract_oracle(left: &[Interval], right: &[Interval]) -> Vec<Interval> {
+        let bound = left
+            .iter()
+            .chain(right.iter())
+            .map(|&(_, r)| r)
+            .max()
+            .unwrap_or(0);
+        let mut covered = vec![false; (bound as usize).saturating_add(1)];
+        for &(l, r) in left {
+            for cp in l..=r {
+                covered[cp as usize] = true;
+            }
+        }
+        for &(l, r) in right {
+            for cp in l..=r {
+                covered[cp as usize] = false;
+            }
+        }
+        let mut out: Vec<Interval> = Vec::new();
+        for cp in 0..=bound {
+            if covered[cp as usize] {
+                match out.last_mut() {
+                    Some(last) if last.1.saturating_add(1) == cp => last.1 = cp,
+                    _ => out.push((cp, cp)),
+                }
+            }
+        }
+        out
+    }
+
+    // Multi-interval `left` so bulk runs between/around `right` are exercised.
+    #[test_case(vec![(0, 5), (10, 15), (20, 25), (30, 35)], &[(12, 13)]; "split with runs around")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25), (30, 35)], &[(0, 0), (33, 33)]; "trim first and last")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25)], &[(50, 60)]; "right after all left")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25)], &[(0, 100)]; "right covers everything")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25)], &[(10, 15)]; "drop whole middle interval")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25), (30, 35), (40, 45)], &[(22, 23), (42, 42)]; "splits with bulk runs between")]
+    #[test_case(vec![(0, 5), (10, 15), (20, 25)], &[(7, 8)]; "right in gap between intervals")]
+    fn test_subtract_against_oracle(left: Vec<Interval>, right: &[Interval]) {
+        let expected = subtract_oracle(&left, right);
+        assert_eq!(subtract(left, right), expected);
+    }
+
     #[test_case("", &[])]
     #[test_case("\u{10A07}", &[(68103, 68103)])]
     #[test_case("a", &[(97, 97)])]

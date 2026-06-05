@@ -25,6 +25,13 @@ fn intervals(c: &mut Criterion) {
     c.bench_function("intervals - subtract", |b| {
         b.iter(|| internals::intervals::subtract(lowercase.to_vec(), uppercase))
     });
+    // Realistic `query` shape: a large category minus a few scattered codepoints
+    // (e.g. `exclude_characters`), so most of `left` is copied in bulk runs.
+    let large = UnicodeVersion::V15_0_0.intervals_for(UnicodeCategory::Lo);
+    let few = internals::intervals::from_str("\u{0E01}\u{4E2D}\u{A000}");
+    c.bench_function("intervals - subtract sparse", |b| {
+        b.iter(|| internals::intervals::subtract(large.to_vec(), &few))
+    });
 }
 
 fn categories(c: &mut Criterion) {
