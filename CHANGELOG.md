@@ -22,6 +22,7 @@
 - `IntervalSet::index_of`, `index_above`, and `contains` now use binary search (`O(log n)`) instead of a linear scan.
 - Skip a redundant sort/merge in `query` for single-category, all-category, and empty queries, whose intervals are already sorted.
 - `query` with a restricted codepoint range no longer materializes and scans the entire category set; it collects only intervals within the range, stopping early per category.
+- `subtract` bulk-copies contiguous runs of unaffected intervals instead of one at a time, speeding up exclusions against a small set (e.g. `exclude_characters`).
 
 ## [0.2.0] - 2023-04-25
 

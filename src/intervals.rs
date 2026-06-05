@@ -25,14 +25,23 @@ pub fn subtract(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
         let (mut i, mut j) = (0, 0);
         let mut result = Vec::with_capacity(left.len());
         while i < left.len() && j < right.len() {
-            let (ll, lr) = left[i];
             let (rl, rr) = right[j];
-            if rr < ll {
+            if rr < left[i].0 {
+                // `right[j]` is entirely before the current interval
                 j += 1;
-            } else if rl > lr {
-                result.push((ll, lr));
+                continue;
+            }
+            // Bulk-copy the run of intervals lying entirely before `right[j]`
+            let start = i;
+            while i < left.len() && left[i].1 < rl {
                 i += 1;
-            } else if rl <= ll {
+            }
+            if i > start {
+                result.extend_from_slice(&left[start..i]);
+                continue;
+            }
+            let (ll, lr) = left[i];
+            if rl <= ll {
                 if rr >= lr {
                     i += 1;
                 } else {
