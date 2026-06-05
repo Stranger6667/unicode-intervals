@@ -16,7 +16,7 @@ pub fn from_str(string: &str) -> Vec<Interval> {
 #[inline]
 // Practically all interval values are < u32::MAX
 // Therefore there will be no panic (debug) / wrapping (release)
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 #[must_use]
 pub fn subtract(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
     if right.is_empty() || left.is_empty() {
@@ -58,7 +58,7 @@ pub fn subtract(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
 // Note, `#[inline]` leads to worse performance
 // Practically all interval values are < u32::MAX
 // Therefore there will be no panic (debug) / wrapping (release)
-#[allow(clippy::integer_arithmetic)]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn merge(intervals: &mut Vec<Interval>) {
     #[allow(clippy::stable_sort_primitive)]
     intervals.sort_by_key(|a| a.0);

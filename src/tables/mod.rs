@@ -5,4 +5,7 @@ pub(crate) mod v12_1_0;
 pub(crate) mod v13_0_0;
 pub(crate) mod v14_0_0;
 pub(crate) mod v15_0_0;
+pub(crate) mod v15_1_0;
+pub(crate) mod v16_0_0;
+pub(crate) mod v17_0_0;
 pub(crate) mod v9_0_0;
