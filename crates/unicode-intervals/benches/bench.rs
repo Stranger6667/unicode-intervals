@@ -61,28 +61,25 @@ fn query(c: &mut Criterion) {
     let version = black_box(UnicodeVersion::V15_0_0);
     c.bench_function("query - intervals_for_set - empty", |b| {
         b.iter(|| {
-            let _ =
-                internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::new()));
+            internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::new()))
         })
     });
     c.bench_function("query - intervals_for_set - all", |b| {
         b.iter(|| {
-            let _ =
-                internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::all()));
+            internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::all()))
         })
     });
     c.bench_function("query - intervals_for_set - single large", |b| {
         b.iter(|| {
-            let _ =
-                internals::query::intervals_for_set(version, black_box(UnicodeCategory::Lu).into());
+            internals::query::intervals_for_set(version, black_box(UnicodeCategory::Lu).into())
         })
     });
     c.bench_function("query - intervals_for_set - multiple", |b| {
         b.iter(|| {
-            let _ = internals::query::intervals_for_set(
+            internals::query::intervals_for_set(
                 version,
                 black_box(UnicodeCategory::Lu | UnicodeCategory::M),
-            );
+            )
         })
     });
     let exclude_categories = black_box(UnicodeCategory::Lu);
