@@ -60,8 +60,7 @@ pub fn subtract(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
 // Therefore there will be no panic (debug) / wrapping (release)
 #[allow(clippy::arithmetic_side_effects)]
 pub fn merge(intervals: &mut Vec<Interval>) {
-    #[allow(clippy::stable_sort_primitive)]
-    intervals.sort_by_key(|a| a.0);
+    intervals.sort_unstable_by_key(|a| a.0);
     let mut border = 0_usize;
     for index in 1..intervals.len() {
         let interval = intervals[index];
@@ -93,6 +92,10 @@ mod tests {
     #[test_case(vec![(1, 2)], &[], &[(1, 2)]; "empty right")]
     #[test_case(vec![(2, 3)], &[(1, 2), (4, 5)], &[(1, 5)]; "totally overlapped gap")]
     #[test_case(vec![(3, 3)], &[(1, 2), (5, 5)], &[(1, 3), (5, 5)]; "partially overlapped gap")]
+    // Equal left bounds must merge to the widest right regardless of input order
+    // (so sort stability does not matter).
+    #[test_case(vec![(5, 10), (5, 7)], &[], &[(5, 10)]; "equal left, wider first")]
+    #[test_case(vec![(5, 7), (5, 10)], &[], &[(5, 10)]; "equal left, wider second")]
     fn union_intervals_empty(mut left: Vec<Interval>, right: &[Interval], expected: &[Interval]) {
         left.extend_from_slice(right);
         merge(&mut left);
