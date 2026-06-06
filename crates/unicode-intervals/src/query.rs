@@ -285,7 +285,8 @@ fn range_mask(min_codepoint: u32, max_codepoint: u32) -> AsciiMask {
     mask
 }
 
-/// Extract sorted, coalesced intervals from a 256-bit membership mask.
+/// Extract sorted, coalesced intervals from a 256-bit membership mask, a whole run of set
+/// bits at a time (`trailing_zeros` to the run start, `trailing_ones` for its length).
 #[allow(clippy::arithmetic_side_effects)]
 fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
     let mut result = Vec::new();
@@ -295,16 +296,25 @@ fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
         let mut remaining = bits[word as usize];
         let base = word * 64;
         while remaining != 0 {
-            let cp = base + remaining.trailing_zeros();
+            let start = remaining.trailing_zeros();
+            let run = (remaining >> start).trailing_ones();
+            let lo = base + start;
+            let hi = lo + run - 1;
             match current {
-                Some((_, ref mut hi)) if *hi + 1 == cp => *hi = cp,
+                Some((_, ref mut chi)) if *chi + 1 == lo => *chi = hi,
                 Some(interval) => {
                     result.push(interval);
-                    current = Some((cp, cp));
+                    current = Some((lo, hi));
                 }
-                None => current = Some((cp, cp)),
+                None => current = Some((lo, hi)),
             }
-            remaining &= remaining - 1; // clear lowest set bit
+            // Clear bits `[0, start + run)`; everything below `start` is already zero.
+            let cleared = start + run;
+            remaining = if cleared == 64 {
+                0
+            } else {
+                remaining & !((1u64 << cleared) - 1)
+            };
         }
         word += 1;
     }
@@ -561,6 +571,71 @@ mod tests {
         for cp in 0..ASCII_BOUND {
             let set = masks[0][(cp / 64) as usize] & (1u64 << (cp % 64)) != 0;
             assert_eq!(set, cp >= 250, "cp={cp}");
+        }
+    }
+
+    // Independent per-bit reference for `extract_intervals`.
+    #[allow(clippy::arithmetic_side_effects)]
+    fn extract_reference(bits: &AsciiMask) -> Vec<Interval> {
+        let mut out: Vec<Interval> = Vec::new();
+        for cp in 0..ASCII_BOUND {
+            if bits[(cp / 64) as usize] & (1u64 << (cp % 64)) != 0 {
+                match out.last_mut() {
+                    Some((_, hi)) if *hi + 1 == cp => *hi = cp,
+                    _ => out.push((cp, cp)),
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_extract_intervals() {
+        // Edge cases: empty, word edges, runs crossing word boundaries, full mask.
+        let cases: [AsciiMask; 9] = [
+            [0, 0, 0, 0],
+            [1, 0, 0, 0],
+            [1 << 63, 0, 0, 0],
+            [1 << 63, 1, 0, 0],  // run crossing the 63/64 boundary
+            [0, 0, 0, 1 << 63],  // last bit
+            [u64::MAX, 0, 0, 0], // full first word
+            [u64::MAX, u64::MAX, u64::MAX, u64::MAX], // all 256 bits
+            [0xAAAA_AAAA_AAAA_AAAA, 0x5555_5555_5555_5555, 0, 0], // alternating, joins at edge
+            [0, u64::MAX, u64::MAX, 0], // run spanning two interior words
+        ];
+        for bits in cases {
+            assert_eq!(
+                extract_intervals(&bits),
+                extract_reference(&bits),
+                "{bits:?}"
+            );
+        }
+        // Deterministic fuzz over dense and sparse masks.
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            state
+        };
+        for _ in 0..5000 {
+            let dense = [next(), next(), next(), next()];
+            let sparse = [
+                next() & next(),
+                next() & next(),
+                next() & next(),
+                next() & next(),
+            ];
+            assert_eq!(
+                extract_intervals(&dense),
+                extract_reference(&dense),
+                "{dense:?}"
+            );
+            assert_eq!(
+                extract_intervals(&sparse),
+                extract_reference(&sparse),
+                "{sparse:?}"
+            );
         }
     }
 }

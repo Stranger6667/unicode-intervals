@@ -4,9 +4,7 @@ use unicode_intervals::{internals, UnicodeCategory, UnicodeCategorySet, UnicodeV
 fn version(c: &mut Criterion) {
     let version = black_box(UnicodeVersion::V15_0_0);
     c.bench_function("version - normalized_categories", |b| {
-        b.iter(|| {
-            let _ = version.normalized_categories();
-        })
+        b.iter(|| version.normalized_categories())
     });
 }
 
@@ -56,22 +54,18 @@ fn intervals(c: &mut Criterion) {
 fn categories(c: &mut Criterion) {
     let all_categories = black_box(UnicodeCategorySet::all());
     c.bench_function("categories - set - display - all", |b| {
-        b.iter(|| {
-            let _ = all_categories.to_string();
-        })
+        b.iter(|| all_categories.to_string())
     });
     let few_categories = UnicodeCategory::Lm | UnicodeCategory::Sk | UnicodeCategory::Zl;
     c.bench_function("categories - set - display - few", |b| {
-        b.iter(|| {
-            let _ = few_categories.to_string();
-        })
+        b.iter(|| few_categories.to_string())
     });
     c.bench_function("categories - merge", |b| {
         b.iter(|| {
-            let _ = internals::categories::merge(
+            internals::categories::merge(
                 Some(all_categories),
                 black_box(UnicodeCategory::Lu.into()),
-            );
+            )
         })
     });
 }
@@ -104,7 +98,7 @@ fn query(c: &mut Criterion) {
     // Full range + multiple categories: hits the concat + sort/merge path over the whole set.
     c.bench_function("query - multiple categories - full range", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .include_categories(black_box(
                     UnicodeCategory::Lu
@@ -114,7 +108,7 @@ fn query(c: &mut Criterion) {
                         | UnicodeCategory::Po
                         | UnicodeCategory::Sm,
                 ))
-                .intervals();
+                .intervals()
         })
     });
     let exclude_categories = black_box(UnicodeCategory::Lu);
@@ -122,77 +116,77 @@ fn query(c: &mut Criterion) {
     let max_codepoint = black_box(128);
     c.bench_function("query - top level - only codepoints", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .exclude_categories(exclude_categories)
                 .min_codepoint(min_codepoint)
                 .max_codepoint(max_codepoint)
-                .intervals();
+                .intervals()
         })
     });
     c.bench_function("query - top level - exclude chars", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .exclude_categories(exclude_categories)
                 .exclude_characters(black_box("A@т"))
                 .min_codepoint(min_codepoint)
                 .max_codepoint(max_codepoint)
-                .intervals();
+                .intervals()
         })
     });
     c.bench_function("query - top level - include and exclude chars", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .exclude_categories(exclude_categories)
                 .include_characters(black_box("0123456789"))
                 .exclude_characters(black_box("QWERTYUIOP"))
                 .min_codepoint(min_codepoint)
                 .max_codepoint(max_codepoint)
-                .intervals();
+                .intervals()
         })
     });
     c.bench_function("query - top level - include only", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .include_categories(UnicodeCategory::Ll)
                 .include_characters("ABC")
                 .min_codepoint(0)
                 .max_codepoint(50)
-                .intervals();
+                .intervals()
         })
     });
     c.bench_function("query - single category - codepoint range", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .include_categories(black_box(UnicodeCategory::Lo))
                 .max_codepoint(black_box(0x1_0000))
-                .intervals();
+                .intervals()
         })
     });
     // High `min_codepoint`: most of the category's intervals sit below the range and are
     // skipped by the binary search in `extend_clamped`.
     c.bench_function("query - single category - high range", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .include_categories(black_box(UnicodeCategory::Lo))
                 .min_codepoint(black_box(0x2_0000))
                 .max_codepoint(black_box(0x2_4000))
-                .intervals();
+                .intervals()
         })
     });
     c.bench_function("query - multiple categories - high range", |b| {
         b.iter(|| {
-            let _ = version
+            version
                 .query()
                 .include_categories(black_box(UnicodeCategory::Lu | UnicodeCategory::Ll))
                 .min_codepoint(black_box(0x1_0000))
                 .max_codepoint(black_box(0x1_0500))
-                .intervals();
+                .intervals()
         })
     });
     let interval_set = UnicodeVersion::V15_0_0
@@ -201,9 +195,7 @@ fn query(c: &mut Criterion) {
         .interval_set()
         .expect("Invalid query input");
     c.bench_function("query - interval set - codepoint_at", |b| {
-        b.iter(|| {
-            let _ = interval_set.codepoint_at(27);
-        })
+        b.iter(|| interval_set.codepoint_at(27))
     });
 }
 
