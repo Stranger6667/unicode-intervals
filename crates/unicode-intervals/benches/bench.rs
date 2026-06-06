@@ -138,6 +138,28 @@ fn query(c: &mut Criterion) {
                 .intervals();
         })
     });
+    // High `min_codepoint`: most of the category's intervals sit below the range and are
+    // skipped by the binary search in `extend_clamped`.
+    c.bench_function("query - single category - high range", |b| {
+        b.iter(|| {
+            let _ = version
+                .query()
+                .include_categories(black_box(UnicodeCategory::Lo))
+                .min_codepoint(black_box(0x2_0000))
+                .max_codepoint(black_box(0x2_4000))
+                .intervals();
+        })
+    });
+    c.bench_function("query - multiple categories - high range", |b| {
+        b.iter(|| {
+            let _ = version
+                .query()
+                .include_categories(black_box(UnicodeCategory::Lu | UnicodeCategory::Ll))
+                .min_codepoint(black_box(0x1_0000))
+                .max_codepoint(black_box(0x1_0500))
+                .intervals();
+        })
+    });
     let interval_set = UnicodeVersion::V15_0_0
         .query()
         .include_categories(UnicodeCategory::UPPERCASE_LETTER)
