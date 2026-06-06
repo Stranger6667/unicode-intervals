@@ -1,5 +1,10 @@
 # unicode-intervals
 
+[![Build](https://img.shields.io/github/actions/workflow/status/Stranger6667/unicode-intervals/ci.yml?branch=main&style=flat-square)](https://github.com/Stranger6667/unicode-intervals/actions)
+[![Version](https://img.shields.io/pypi/v/unicode_intervals.svg?style=flat-square)](https://pypi.org/project/unicode_intervals/)
+[![Python versions](https://img.shields.io/pypi/pyversions/unicode_intervals.svg?style=flat-square)](https://pypi.org/project/unicode_intervals/)
+[![License](https://img.shields.io/pypi/l/unicode_intervals.svg?style=flat-square)](https://github.com/Stranger6667/unicode-intervals/blob/main/LICENSE-MIT)
+
 Search Unicode code point intervals by category, codepoint range, and characters.
 
 ## Installation
