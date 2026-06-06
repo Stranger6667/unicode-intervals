@@ -58,6 +58,14 @@ def test_categories():
     assert {"Lu", "Ll", "Nd"} <= set(categories)
 
 
+def test_categories_cached():
+    v15 = unicode_intervals.UnicodeVersion("15.0.0")
+    v16 = unicode_intervals.UnicodeVersion("16.0.0")
+    # Same version returns the identical cached tuple; different versions do not.
+    assert unicode_intervals.categories(v15) is unicode_intervals.categories(v15)
+    assert unicode_intervals.categories(v15) is not unicode_intervals.categories(v16)
+
+
 def test_as_general_categories():
     assert isinstance(unicode_intervals.as_general_categories(["N"]), tuple)
     assert set(unicode_intervals.as_general_categories(["N"])) == {"Nd", "Nl", "No"}
