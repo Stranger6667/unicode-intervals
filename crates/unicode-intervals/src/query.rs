@@ -113,15 +113,25 @@ fn collect_in_range(
     }
 }
 
+/// Below this length, scanning the prefix is cheaper than a `log2(n)` search for the start.
+const BINARY_SEARCH_THRESHOLD: usize = 32;
+
 /// Append intervals overlapping `[min_codepoint, max_codepoint]`, clamped to it.
-/// Relies on `table` being sorted by the left bound to stop early.
+/// `table` is sorted and non-overlapping, so binary search past the leading intervals below
+/// the range, then stop on the first one past it. Only search when it can pay off.
 fn extend_clamped(
     out: &mut Vec<Interval>,
     table: &[Interval],
     min_codepoint: u32,
     max_codepoint: u32,
 ) {
-    for &(left, right) in table {
+    let start = match table.first() {
+        Some(&(_, right)) if right < min_codepoint && table.len() >= BINARY_SEARCH_THRESHOLD => {
+            table.partition_point(|&(_, right)| right < min_codepoint)
+        }
+        _ => 0,
+    };
+    for &(left, right) in &table[start..] {
         if left > max_codepoint {
             break;
         }
@@ -256,6 +266,11 @@ mod tests {
     #[test_case(None, UnicodeCategorySet::new(), "", "", 65076, 65102; "both bounds mid range")]
     // all categories, clamped
     #[test_case(Some(UnicodeCategorySet::all()), UnicodeCategorySet::new(), "", "", 0, 200; "all categories clamped")]
+    // high min_codepoint: skips leading intervals in `extend_clamped`
+    #[test_case(Some(UnicodeCategory::Lo.into()), UnicodeCategorySet::new(), "", "", 0x1_0000, 0x1_2000; "single category high range")]
+    #[test_case(Some(UnicodeCategory::Lu | UnicodeCategory::Ll), UnicodeCategorySet::new(), "", "", 0xFF00, 0x1_0400; "multi category high range")]
+    // min_codepoint inside an interval (boundary for the skip predicate)
+    #[test_case(Some(UnicodeCategory::Ll.into()), UnicodeCategorySet::new(), "", "", 98, 200; "min inside interval")]
     // left-bound-only arm (max == MAX_CODEPOINT), small set keeps the scan cheap
     #[test_case(Some(UnicodeCategory::Zl.into()), UnicodeCategorySet::new(), "", "", 8000, MAX_CODEPOINT; "left bound only")]
     // full range arm
