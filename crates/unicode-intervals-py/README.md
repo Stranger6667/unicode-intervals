@@ -1,7 +1,6 @@
 # unicode-intervals
 
 Search Unicode code point intervals by category, codepoint range, and characters.
-Fast Rust core (via PyO3), output-compatible with Hypothesis's `charmap`.
 
 ## Installation
 
@@ -35,7 +34,7 @@ assert unicode_intervals.query(
     categories=["Lu"], min_codepoint=65, max_codepoint=90, exclude_characters="AEIOU"
 ) == ((66, 68), (70, 72), (74, 78), (80, 84), (86, 90))
 
-# Exclude whole categories (an extra over charmap): drop digits from U+0030..U+003A
+# Exclude whole categories: drop digits from U+0030..U+003A
 assert unicode_intervals.query(
     exclude_categories=["Nd"], min_codepoint=48, max_codepoint=58
 ) == ((58, 58),)
