@@ -227,6 +227,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYPY_VERSION }}
+      - name: Resolve interpreter path
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            python_path=$(python -c "import sys; print(sys.executable)")
+          else
+            python_path=$(which python || which python3)
+          fi
+          echo "PYTHON_PATH=$python_path" >> "$GITHUB_ENV"
+          "$python_path" --version
       - uses: dtolnay/rust-toolchain@stable
       - name: Build wheels - PyPy (manylinux)
         if: ${{ matrix.manylinux != '' }}
@@ -240,7 +250,7 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYPY_VERSION }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_PATH }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
