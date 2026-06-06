@@ -24,6 +24,7 @@ classifiers = [
 
 [project.optional-dependencies]
 tests = ["pytest>=8.3", "hypothesis>=6.130"]
+bench = ["pytest>=8.3", "pytest-benchmark>=5.0", "hypothesis>=6.130"]
 
 [tool.maturin]
 python-source = "python"

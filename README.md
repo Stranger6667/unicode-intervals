@@ -17,6 +17,8 @@ The main purpose of `unicode-intervals` is to simplify generating strings that m
 unicode-intervals = "0.2"
 ```
 
+Python bindings are also available, see [`unicode-intervals-py`](crates/unicode-intervals-py/README.md).
+
 <br>
 
 ## Examples
