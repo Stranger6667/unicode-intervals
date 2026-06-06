@@ -93,6 +93,10 @@ assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233)])
 
 `unicode-intervals` supports Unicode 9.0.0 - 17.0.0.
 
+## Acknowledgements
+
+The query semantics and category ordering are modeled on [Hypothesis](https://github.com/HypothesisWorks/hypothesis)'s `charmap` module.
+
 #### License
 
 <sup>

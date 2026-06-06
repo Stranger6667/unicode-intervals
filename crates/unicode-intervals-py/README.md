@@ -85,3 +85,7 @@ version = unicode_intervals.UnicodeVersion(unicodedata.unidata_version)
 intervals = unicode_intervals.query(categories=["Lu", "Ll"], version=version)
 assert intervals[:2] == ((65, 90), (97, 122))
 ```
+
+## Acknowledgements
+
+The API and category ordering are modeled on [Hypothesis](https://github.com/HypothesisWorks/hypothesis)'s `charmap` module, which inspired this project.
