@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use unicode_intervals::{internals, UnicodeCategory, UnicodeCategorySet, UnicodeVersion};
 
 fn version(c: &mut Criterion) {
@@ -31,6 +31,25 @@ fn intervals(c: &mut Criterion) {
     let few = internals::intervals::from_str("\u{0E01}\u{4E2D}\u{A000}");
     c.bench_function("intervals - subtract sparse", |b| {
         b.iter(|| internals::intervals::subtract(large.to_vec(), &few))
+    });
+    // Concatenated, sorted-per-category slices that interleave across the codepoint space:
+    // the input shape `query` feeds to `merge` for a multi-category set.
+    let multi = internals::query::intervals_for_set(
+        UnicodeVersion::V15_0_0,
+        UnicodeCategory::Lu
+            | UnicodeCategory::Ll
+            | UnicodeCategory::Lo
+            | UnicodeCategory::Nd
+            | UnicodeCategory::Po
+            | UnicodeCategory::Sm,
+    )
+    .into_owned();
+    c.bench_function("intervals - merge multi-category", |b| {
+        b.iter_batched(
+            || multi.clone(),
+            |mut intervals| internals::intervals::merge(&mut intervals),
+            BatchSize::SmallInput,
+        )
     });
 }
 
@@ -80,6 +99,22 @@ fn query(c: &mut Criterion) {
                 version,
                 black_box(UnicodeCategory::Lu | UnicodeCategory::M),
             )
+        })
+    });
+    // Full range + multiple categories: hits the concat + sort/merge path over the whole set.
+    c.bench_function("query - multiple categories - full range", |b| {
+        b.iter(|| {
+            let _ = version
+                .query()
+                .include_categories(black_box(
+                    UnicodeCategory::Lu
+                        | UnicodeCategory::Ll
+                        | UnicodeCategory::Lo
+                        | UnicodeCategory::Nd
+                        | UnicodeCategory::Po
+                        | UnicodeCategory::Sm,
+                ))
+                .intervals();
         })
     });
     let exclude_categories = black_box(UnicodeCategory::Lu);
