@@ -1,6 +1,6 @@
 [package]
 name = "unicode-intervals-py"
-version = "0.3.0"
+version = "0.3.1"
 description = "Search Unicode code point intervals by category, range, and characters"
 readme = "README.md"
 keywords = ["unicode", "codepoint", "interval"]
