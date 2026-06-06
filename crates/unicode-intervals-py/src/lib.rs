@@ -1,5 +1,10 @@
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple, wrap_pyfunction};
+use std::sync::OnceLock;
 use unicode_intervals_core::{UnicodeCategory, UnicodeCategorySet, UnicodeVersion as CoreVersion};
+
+/// Cached category-name tuples, one slot per bundled version (the result is immutable).
+static CATEGORIES_CACHE: [OnceLock<Py<PyTuple>>; CoreVersion::ALL.len()] =
+    [const { OnceLock::new() }; CoreVersion::ALL.len()];
 
 /// A bundled Unicode version, e.g. ``UnicodeVersion("16.0.0")``.
 #[pyclass(
@@ -147,12 +152,17 @@ fn query(
 #[pyo3(signature = (version=None))]
 fn categories(py: Python<'_>, version: Option<PyUnicodeVersion>) -> PyResult<Py<PyTuple>> {
     let core_version: CoreVersion = version.map_or_else(CoreVersion::latest, Into::into);
-    let names: Vec<String> = core_version
-        .normalized_categories()
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    Ok(PyTuple::new(py, names)?.into())
+    let cached = CATEGORIES_CACHE[core_version as usize].get_or_init(|| {
+        let names = core_version
+            .normalized_categories()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        PyTuple::new(py, names)
+            .expect("category names are valid")
+            .unbind()
+    });
+    Ok(cached.clone_ref(py))
 }
 
 /// Expand major classes (e.g. ``"N"`` -> ``"Nd"``, ``"Nl"``, ``"No"``) and validate category names.
