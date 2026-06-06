@@ -428,6 +428,9 @@ mod tests {
     // empty category set in a ranged query (`collect_in_range` zero branch)
     #[test_case(Some(UnicodeCategorySet::new()), UnicodeCategorySet::new(), "", "", 0, 128; "empty set ranged")]
     #[test_case(Some(UnicodeCategorySet::new()), UnicodeCategorySet::new(), "abc", "", 0, 128; "empty set ranged with chars")]
+    // empty set on the slow path (max >= 256): `collect_in_range` zero branch + `intervals = include_intervals`
+    #[test_case(Some(UnicodeCategorySet::new()), UnicodeCategorySet::new(), "", "", 0, 0x1000; "empty set ranged slow")]
+    #[test_case(Some(UnicodeCategorySet::new()), UnicodeCategorySet::new(), "abc", "", 0, 0x1000; "empty set ranged with chars slow")]
     // include-driven paths
     #[test_case(Some(UnicodeCategory::Ll.into()), UnicodeCategorySet::new(), "ABC", "", 0, 50; "include one + chars")]
     #[test_case(Some(UnicodeCategory::Lu | UnicodeCategory::Ll), UnicodeCategorySet::new(), "\u{2603}", "", 0, 128; "include char beyond max")]
