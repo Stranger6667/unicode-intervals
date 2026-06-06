@@ -14,7 +14,7 @@ The main purpose of `unicode-intervals` is to simplify generating strings that m
 
 ```toml
 [dependencies]
-unicode-intervals = "0.2"
+unicode-intervals = "0.3"
 ```
 
 Python bindings are also available, see [`unicode-intervals-py`](crates/unicode-intervals-py/README.md).

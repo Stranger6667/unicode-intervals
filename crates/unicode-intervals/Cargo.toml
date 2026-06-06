@@ -1,6 +1,6 @@
 [package]
 name = "unicode-intervals"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
 edition = "2021"
 documentation = "https://github.com/Stranger6667/unicode-intervals"
