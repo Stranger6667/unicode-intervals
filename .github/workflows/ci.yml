@@ -37,7 +37,7 @@ jobs:
             # wasmtime can't resolve; build/run only the core crate on wasm.
             exclude-py: --exclude unicode-intervals-py
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -65,7 +65,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -78,7 +78,7 @@ jobs:
         run: cargo llvm-cov --all-features --workspace --exclude unicode-intervals-py --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           files: lcov.info
           fail_ci_if_error: true
@@ -88,7 +88,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -99,7 +99,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -115,9 +115,9 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-2025]
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14', 'pypy3.11']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv python install ${{ matrix.python-version }}
       - run: uvx --with=".[tests]" --python='${{ matrix.python-version }}' pytest tests-py
         working-directory: crates/unicode-intervals-py
@@ -132,9 +132,9 @@ jobs:
         os: [ubuntu-24.04, macos-15, windows-2025]
         python-version: ['3.13t', '3.14t']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv python install ${{ matrix.python-version }}
 
       - name: Find Python path (Windows)

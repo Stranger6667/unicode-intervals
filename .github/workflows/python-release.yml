@@ -26,10 +26,10 @@ jobs:
   sdist:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv build --sdist --out-dir dist crates/unicode-intervals-py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist
@@ -44,8 +44,8 @@ jobs:
           - target: universal2-apple-darwin
             artifact: wheel-macos-universal
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv python install ${{ env.PYTHON_ABI_VERSION }}
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -54,7 +54,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist
@@ -65,8 +65,8 @@ jobs:
       matrix:
         target: [x64, x86]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_ABI_VERSION }}
           architecture: ${{ matrix.target }}
@@ -75,7 +75,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-windows-${{ matrix.target }}
           path: dist
@@ -92,13 +92,13 @@ jobs:
           - target: aarch64
             manylinux: 2_28
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-${{ matrix.target }}
           path: dist
@@ -109,13 +109,13 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_2
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-musllinux-${{ matrix.target }}
           path: dist
@@ -130,13 +130,13 @@ jobs:
           - target: aarch64
             manylinux: 2_28
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-freethreaded-${{ matrix.target }}
           path: dist
@@ -147,13 +147,13 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_2
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-musllinux-freethreaded-${{ matrix.target }}
           path: dist
@@ -164,8 +164,8 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv python install 3.13t 3.14t
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -174,7 +174,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.13t 3.14t
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-macos-freethreaded-${{ matrix.target }}
           path: dist
@@ -182,8 +182,8 @@ jobs:
   windows-freethreaded:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: |
           uv python install 3.13t
           uv python install 3.14t
@@ -196,7 +196,7 @@ jobs:
         with:
           target: x64
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ steps.python-paths.outputs.py313t }} ${{ steps.python-paths.outputs.py314t }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-windows-freethreaded
           path: dist
@@ -223,8 +223,8 @@ jobs:
             artifact: wheel-linux-pypy-aarch64
             manylinux: 2_28
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYPY_VERSION }}
       - name: Resolve interpreter path
@@ -251,7 +251,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_PATH }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist
@@ -259,18 +259,18 @@ jobs:
   pyodide:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
           components: rust-src
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: |
           pip install "pyodide-build>=0.28.0"
           echo "EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)" >> "$GITHUB_ENV"
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: mymindstorm/setup-emsdk@v16
         with:
           version: ${{ env.EMSCRIPTEN_VERSION }}
       - name: Install Pyodide Rust sysroot
@@ -287,7 +287,7 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
           RUSTFLAGS: "-C link-arg=-sSIDE_MODULE=2 -Z link-native-libraries=no -Z emscripten-wasm-eh"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-pyodide
           if-no-files-found: error
@@ -312,7 +312,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: all
       - name: Collect wheels (pyodide kept out of the PyPI set)
@@ -332,7 +332,7 @@ jobs:
       - name: Extract version
         run: echo "version=${GITHUB_REF#refs/tags/python-v}" >> "$GITHUB_ENV"
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           make_latest: false
           draft: true
