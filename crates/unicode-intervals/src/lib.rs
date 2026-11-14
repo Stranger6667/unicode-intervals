@@ -202,6 +202,19 @@ impl FromStr for UnicodeVersion {
     }
 }
 
+/// `normalized_categories` for every bundled version, indexed by `UnicodeVersion as usize`.
+const NORMALIZED_CATEGORIES: [[UnicodeCategory; 30]; 11] = {
+    let mut output = [[UnicodeCategory::Cc; 30]; 11];
+    let mut idx = 0;
+    // `idx` stays below 11, so the increment can't overflow.
+    #[allow(clippy::arithmetic_side_effects)]
+    while idx < UnicodeVersion::ALL.len() {
+        output[idx] = UnicodeVersion::ALL[idx].compute_normalized_categories();
+        idx += 1;
+    }
+    output
+};
+
 impl UnicodeVersion {
     /// Every bundled Unicode version, oldest to newest.
     pub const ALL: [UnicodeVersion; 11] = [
@@ -270,6 +283,10 @@ impl UnicodeVersion {
     #[inline]
     #[must_use]
     pub const fn normalized_categories(self) -> [UnicodeCategory; 30] {
+        NORMALIZED_CATEGORIES[self as usize]
+    }
+
+    const fn compute_normalized_categories(self) -> [UnicodeCategory; 30] {
         // Pair each category with a sort key: interval count, ties broken by abbreviation
         // (rank < 30, so `count * 30 + rank` orders by count then abbreviation).
         let mut keyed: [(UnicodeCategory, usize); 30] = [(UnicodeCategory::Cc, 0); 30];
@@ -655,6 +672,18 @@ mod tests {
                 (65343, 65343),
             ]
         );
+    }
+
+    // The table is built at compile time, so exercise its builder at runtime too.
+    #[test]
+    fn test_compute_normalized_categories() {
+        for version in UnicodeVersion::ALL {
+            assert_eq!(
+                version.compute_normalized_categories(),
+                version.normalized_categories(),
+                "{version}"
+            );
+        }
     }
 
     #[test]
