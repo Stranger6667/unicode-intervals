@@ -1,3 +1,5 @@
+// `#[pyclass(from_py_object)]` expands to a `clone` call on the `Copy` version enum.
+#![allow(clippy::clone_on_copy)]
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple, wrap_pyfunction};
 use std::sync::OnceLock;
 use unicode_intervals_core::{UnicodeCategory, UnicodeCategorySet, UnicodeVersion as CoreVersion};

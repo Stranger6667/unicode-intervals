@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Free-threaded CPython 3.13 wheels.
+
 ## [0.3.1] - 2026-06-06
 
 ### Performance

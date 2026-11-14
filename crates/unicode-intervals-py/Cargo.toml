@@ -18,7 +18,6 @@ crate-type = ["cdylib"]
 [dependencies]
 unicode_intervals_core = { package = "unicode-intervals", path = "../unicode-intervals" }
 pyo3 = { version = "0.28", features = ["extension-module", "abi3-py310"] }
-pyo3-built = "0.6"
 
 [build-dependencies]
 built = { version = "=0.8.0", features = ["cargo-lock", "chrono"] }

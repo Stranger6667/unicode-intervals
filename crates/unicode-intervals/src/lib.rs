@@ -278,12 +278,11 @@ impl UnicodeVersion {
         // `idx` stays below 30, so the cast and increment can't overflow.
         #[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
         while idx < table.len() {
-            if let Some(category) = UnicodeCategory::from_index(idx as u8) {
-                keyed[idx] = (
-                    category,
-                    table[idx].len() * 30 + category.abbrev_rank() as usize,
-                );
-            }
+            let category = UnicodeCategory::from_index(idx as u8).expect("Index is below 30");
+            keyed[idx] = (
+                category,
+                table[idx].len() * 30 + category.abbrev_rank() as usize,
+            );
             idx += 1;
         }
         // Bubble sort by key (stable, and works in a `const` context).
