@@ -18,6 +18,10 @@ fn intervals(c: &mut Criterion) {
     c.bench_function("intervals - from_str long", |b| {
         b.iter(|| internals::intervals::from_str(long_string))
     });
+    let latin1_string = black_box("abcéèàüöß0123");
+    c.bench_function("intervals - from_str latin1", |b| {
+        b.iter(|| internals::intervals::from_str(latin1_string))
+    });
     let uppercase = UnicodeVersion::V15_0_0.intervals_for(UnicodeCategory::Lu);
     let lowercase = UnicodeVersion::V15_0_0.intervals_for(UnicodeCategory::Ll);
     c.bench_function("intervals - subtract", |b| {
@@ -108,6 +112,15 @@ fn query(c: &mut Criterion) {
                         | UnicodeCategory::Po
                         | UnicodeCategory::Sm,
                 ))
+                .intervals()
+        })
+    });
+    // Excluding one category leaves 29 to union: the widest concat + sort/merge input.
+    c.bench_function("query - exclude single category - full range", |b| {
+        b.iter(|| {
+            version
+                .query()
+                .exclude_categories(black_box(UnicodeCategory::Cs))
                 .intervals()
         })
     });
