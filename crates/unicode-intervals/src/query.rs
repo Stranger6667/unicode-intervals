@@ -38,12 +38,14 @@ pub fn query(
     let include_intervals = intervals::from_str(include_characters);
     let exclude_intervals = intervals::from_str(exclude_characters);
 
-    // Concatenated category slices need a re-merge; a single category (or the whole
-    // range) is already sorted and non-overlapping.
-    let needs_merge = categories.len() > 1 && categories.into_value() != ALL_CATEGORIES;
-    // Collect category intervals already clamped to the codepoint range. For a restricted
-    // range this avoids materializing and scanning the entire set.
-    let mut intervals = if min_codepoint == 0 && max_codepoint == MAX_CODEPOINT {
+    let mut intervals = if categories.len() > 1 && categories.into_value() != ALL_CATEGORIES {
+        union_runs(
+            RUNS[version as usize],
+            categories.into_value(),
+            min_codepoint,
+            max_codepoint,
+        )
+    } else if min_codepoint == 0 && max_codepoint == MAX_CODEPOINT {
         intervals_for_set(version, categories).into_owned()
     } else {
         collect_in_range(version, categories, min_codepoint, max_codepoint)
@@ -53,8 +55,6 @@ pub fn query(
         intervals = include_intervals;
     } else if !include_intervals.is_empty() {
         intervals.extend_from_slice(&include_intervals);
-        intervals::merge(&mut intervals);
-    } else if needs_merge {
         intervals::merge(&mut intervals);
     }
     // Exclude intervals
@@ -92,7 +92,8 @@ pub fn intervals_for_set(
     }
 }
 
-/// Collect category intervals clamped to `[min_codepoint, max_codepoint]`.
+/// Collect the intervals of at most one category (or all of them) clamped to
+/// `[min_codepoint, max_codepoint]`.
 fn collect_in_range(
     version: UnicodeVersion,
     categories: UnicodeCategorySet,
@@ -102,24 +103,11 @@ fn collect_in_range(
     match categories.into_value() {
         0 => Vec::new(),
         ALL_CATEGORIES => vec![(min_codepoint, max_codepoint)],
-        value => {
-            let table = version.table();
-            if categories.len() == 1 {
-                let category_idx = value.trailing_zeros() as usize;
-                clamped(table[category_idx], min_codepoint, max_codepoint)
-            } else {
-                let mut intervals = Vec::new();
-                for category in categories.iter() {
-                    extend_clamped(
-                        &mut intervals,
-                        table[category as usize],
-                        min_codepoint,
-                        max_codepoint,
-                    );
-                }
-                intervals
-            }
-        }
+        value => clamped(
+            version.table()[value.trailing_zeros() as usize],
+            min_codepoint,
+            max_codepoint,
+        ),
     }
 }
 
@@ -179,6 +167,109 @@ fn extend_clamped(
             out.push((lo, hi));
         }
     }
+}
+
+/// A run packs a category interval as `left << CATEGORY_BITS | category`.
+const CATEGORY_BITS: u32 = 5;
+const CATEGORY_MASK: u32 = (1 << CATEGORY_BITS) - 1;
+
+const fn count_runs(table: &[&[Interval]]) -> usize {
+    let mut count = 0;
+    let mut category = 0;
+    // Table sizes are far below `usize::MAX`.
+    #[allow(clippy::arithmetic_side_effects)]
+    while category < table.len() {
+        count += table[category].len();
+        category += 1;
+    }
+    count
+}
+
+/// All category intervals of `table` as sorted runs. The categories partition the codepoint
+/// space, so each run ends right before the next one starts.
+#[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
+const fn build_runs<const N: usize>(table: &[&[Interval]]) -> [u32; N] {
+    let mut runs = [0u32; N];
+    let mut cursors = [0usize; 30];
+    let mut next_left = 0;
+    let mut idx = 0;
+    while idx < N {
+        // The category whose next interval starts where the previous run ended.
+        let mut category = 0;
+        loop {
+            assert!(
+                category < table.len(),
+                "categories must partition the codepoint space"
+            );
+            let slice = table[category];
+            if cursors[category] < slice.len() && slice[cursors[category]].0 == next_left {
+                break;
+            }
+            category += 1;
+        }
+        let (left, right) = table[category][cursors[category]];
+        runs[idx] = left << CATEGORY_BITS | category as u32;
+        cursors[category] += 1;
+        next_left = right + 1;
+        idx += 1;
+    }
+    assert!(
+        next_left == MAX_CODEPOINT + 1,
+        "categories must partition the codepoint space"
+    );
+    runs
+}
+
+macro_rules! runs {
+    ($($version:ident),+) => {
+        [$({
+            static RUNS: [u32; count_runs(crate::tables::$version::BY_NAME)] =
+                build_runs(crate::tables::$version::BY_NAME);
+            &RUNS
+        }),+]
+    };
+}
+
+/// Runs for every bundled version, indexed by `UnicodeVersion as usize`.
+static RUNS: [&[u32]; 11] = runs!(
+    v9_0_0, v10_0_0, v11_0_0, v12_0_0, v12_1_0, v13_0_0, v14_0_0, v15_0_0, v15_1_0, v16_0_0,
+    v17_0_0
+);
+
+/// Union of the categories in `mask`, clamped to `[min_codepoint, max_codepoint]`.
+/// Membership bits of 64 runs at a time: a bit that differs from the previous one is where
+/// an interval starts or ends.
+#[allow(clippy::arithmetic_side_effects)]
+fn union_runs(runs: &[u32], mask: u32, min_codepoint: u32, max_codepoint: u32) -> Vec<Interval> {
+    // The first run starts at 0, so there is always one starting at or below `min_codepoint`.
+    let start = runs.partition_point(|&run| run >> CATEGORY_BITS <= min_codepoint) - 1;
+    let end = runs.partition_point(|&run| run >> CATEGORY_BITS <= max_codepoint);
+    let runs = &runs[start..end];
+    let mut intervals = Vec::with_capacity(runs.len() / 2 + 1);
+    let mut left = 0;
+    let mut previous = 0;
+    for chunk in runs.chunks(64) {
+        let members = chunk.iter().rev().fold(0u64, |members, &run| {
+            members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
+        });
+        let mut edges = (members ^ (members << 1 | previous)) & (u64::MAX >> (64 - chunk.len()));
+        previous = members >> (chunk.len() - 1);
+        while edges != 0 {
+            let idx = edges.trailing_zeros();
+            let boundary = max(chunk[idx as usize] >> CATEGORY_BITS, min_codepoint);
+            if members >> idx & 1 == 1 {
+                left = boundary;
+            } else {
+                intervals.push((left, boundary - 1));
+            }
+            // Clear the lowest set bit.
+            edges &= edges - 1;
+        }
+    }
+    if previous == 1 {
+        intervals.push((left, max_codepoint));
+    }
+    intervals
 }
 
 /// Codepoints below this bound fit in a 256-bit mask (`[u64; 4]`).
@@ -527,6 +618,123 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    // Every run is exactly one category interval, and every category interval is a run.
+    #[test]
+    fn test_runs() {
+        for version in UnicodeVersion::ALL {
+            let table = version.table();
+            let runs = RUNS[version as usize];
+            assert_eq!(
+                runs.len(),
+                table.iter().map(|slice| slice.len()).sum::<usize>()
+            );
+            for (idx, &run) in runs.iter().enumerate() {
+                let left = run >> CATEGORY_BITS;
+                let right = runs
+                    .get(idx + 1)
+                    .map_or(MAX_CODEPOINT, |next| (next >> CATEGORY_BITS) - 1);
+                let category = (run & CATEGORY_MASK) as usize;
+                assert!(
+                    table[category].binary_search(&(left, right)).is_ok(),
+                    "version={version} run={idx} interval=({left},{right}) category={category}"
+                );
+            }
+        }
+    }
+
+    // `build_runs` runs at compile time for `RUNS`, so exercise it at runtime too.
+    #[test]
+    fn test_build_runs() {
+        const COUNT: usize = count_runs(crate::tables::v15_0_0::BY_NAME);
+        let table = UnicodeVersion::V15_0_0.table();
+        assert_eq!(count_runs(table), COUNT);
+        assert_eq!(
+            build_runs::<COUNT>(table),
+            RUNS[UnicodeVersion::V15_0_0 as usize]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "categories must partition the codepoint space")]
+    fn test_build_runs_gap() {
+        let _ = build_runs::<1>(&[&[(1, MAX_CODEPOINT)]]);
+    }
+
+    #[test]
+    #[should_panic(expected = "categories must partition the codepoint space")]
+    fn test_build_runs_short() {
+        let _ = build_runs::<1>(&[&[(0, 5)]]);
+    }
+
+    // Independent reference for `union_runs`: clamp every category on its own, then sort + merge.
+    fn union_reference(
+        version: UnicodeVersion,
+        mask: u32,
+        min_codepoint: u32,
+        max_codepoint: u32,
+    ) -> Vec<Interval> {
+        let mut expected = Vec::new();
+        for (category, slice) in version.table().iter().enumerate() {
+            if mask >> category & 1 == 1 {
+                extend_clamped(&mut expected, slice, min_codepoint, max_codepoint);
+            }
+        }
+        if !expected.is_empty() {
+            intervals::merge(&mut expected);
+        }
+        expected
+    }
+
+    #[test]
+    fn test_union_runs() {
+        let version = UnicodeVersion::V15_0_0;
+        let runs = RUNS[version as usize];
+        let check = |mask: u32, min_codepoint: u32, max_codepoint: u32| {
+            assert_eq!(
+                union_runs(runs, mask, min_codepoint, max_codepoint),
+                union_reference(version, mask, min_codepoint, max_codepoint),
+                "mask={mask:#x} range=({min_codepoint},{max_codepoint})"
+            );
+        };
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as u32
+        };
+        let masks = [
+            1,
+            ALL_CATEGORIES,
+            ALL_CATEGORIES ^ 1,
+            ALL_CATEGORIES ^ (1 << 29),
+            0x1555_5555,
+            0x2aaa_aaaa,
+        ];
+        // Ranges covering an exact number of runs around the 64-run chunk size, starting on a
+        // run boundary and in the middle of a run.
+        for mask in masks {
+            for first in [0, 1, 63, 64, 100, runs.len() - 130] {
+                for count in [1, 2, 63, 64, 65, 127, 128, 129] {
+                    let min_codepoint = runs[first] >> CATEGORY_BITS;
+                    let max_codepoint = (runs[first + count] >> CATEGORY_BITS) - 1;
+                    check(mask, min_codepoint, max_codepoint);
+                    check(mask, min_codepoint + 1, max_codepoint + 1);
+                    check(mask, min_codepoint, min_codepoint);
+                }
+            }
+            check(mask, 0, MAX_CODEPOINT);
+            check(mask, MAX_CODEPOINT, MAX_CODEPOINT);
+        }
+        for _ in 0..5000 {
+            let mask = next() & next() & ALL_CATEGORIES;
+            let (a, b) = (next() % (MAX_CODEPOINT + 1), next() % (MAX_CODEPOINT + 1));
+            check(mask, a.min(b), a.max(b));
+            check(next() & ALL_CATEGORIES, a.min(b), a.max(b));
+            check(mask, 0, MAX_CODEPOINT);
         }
     }
 
