@@ -1,11 +1,25 @@
-use crate::Interval;
+use crate::{
+    query::{extract_intervals, AsciiMask},
+    Interval,
+};
 
 /// Create a set of intervals for the given string.
 #[inline]
 #[must_use]
+#[allow(clippy::arithmetic_side_effects)]
 pub fn from_str(string: &str) -> Vec<Interval> {
     if string.is_empty() {
         return vec![];
+    }
+    // UTF-8 lead bytes 0xC2 and 0xC3 encode U+0080..=U+00FF, so no byte above them means
+    // every character fits the 256-bit mask.
+    if string.bytes().fold(0, u8::max) < 0xC4 {
+        let mut bits: AsciiMask = [0; 4];
+        for character in string.chars() {
+            let codepoint = character as u32;
+            bits[(codepoint / 64) as usize] |= 1u64 << (codepoint % 64);
+        }
+        return extract_intervals(&bits);
     }
     let mut intervals: Vec<_> = string.chars().map(|c| (c as u32, c as u32)).collect();
     merge(&mut intervals);
@@ -161,6 +175,11 @@ mod tests {
     #[test_case("aa", &[(97, 97)])]
     #[test_case("abcdef0123456789", &[(48, 57), (97, 102)])]
     #[test_case("01234fedcba98765", &[(48, 57), (97, 102)])]
+    #[test_case("\u{ff}\u{e9}\u{e8}a\u{80}", &[(97, 97), (128, 128), (232, 233), (255, 255)]; "latin1")]
+    #[test_case("\u{0}\u{3f}\u{40}\u{7f}\u{80}\u{bf}\u{c0}", &[(0, 0), (63, 64), (127, 128), (191, 192)]; "mask word edges")]
+    #[test_case("\u{100}\u{ff}a", &[(97, 97), (255, 256)]; "first char past the mask")]
+    #[test_case("a\u{442}@", &[(64, 64), (97, 97), (1090, 1090)]; "mixed")]
+    #[test_case("\u{442}\u{442}\u{443}", &[(1090, 1091)]; "duplicates past the mask")]
     fn test_from_str(value: &str, expected: &[Interval]) {
         assert_eq!(from_str(value), expected);
     }
