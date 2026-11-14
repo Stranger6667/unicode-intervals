@@ -716,9 +716,19 @@ mod tests {
     #[test]
     fn test_as_general_categories() {
         let v = UnicodeVersion::V15_0_0;
-        let n = as_general_categories(["N"], v).expect("valid");
-        assert_eq!(n.len(), 3);
-        assert!(n.contains(&Nd) && n.contains(&Nl) && n.contains(&No));
+        for (major, expected) in [
+            ("L", UnicodeCategory::L),
+            ("M", UnicodeCategory::M),
+            ("N", UnicodeCategory::N),
+            ("P", UnicodeCategory::P),
+            ("S", UnicodeCategory::S),
+            ("Z", UnicodeCategory::Z),
+            ("C", UnicodeCategory::C),
+        ] {
+            let got = as_general_categories([major], v).expect("valid");
+            assert_eq!(got.len(), expected.len(), "{major}");
+            assert!(got.iter().all(|c| expected.contains(*c)), "{major}");
+        }
         let got = as_general_categories(["Lu", "Ll"], v).expect("valid");
         assert_eq!(got.len(), 2);
         assert!(got.contains(&Lu) && got.contains(&Ll));
