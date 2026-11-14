@@ -184,7 +184,7 @@ fn extend_clamped(
 /// Codepoints below this bound fit in a 256-bit mask (`[u64; 4]`).
 const ASCII_BOUND: u32 = 256;
 
-type AsciiMask = [u64; 4];
+pub(crate) type AsciiMask = [u64; 4];
 
 /// Per-category membership masks for codepoints `0..256`, built at compile time from `table`.
 #[allow(clippy::arithmetic_side_effects)]
@@ -311,7 +311,7 @@ fn range_mask(min_codepoint: u32, max_codepoint: u32) -> AsciiMask {
 /// Extract sorted, coalesced intervals from a 256-bit membership mask, a whole run of set
 /// bits at a time (`trailing_zeros` to the run start, `trailing_ones` for its length).
 #[allow(clippy::arithmetic_side_effects)]
-fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
+pub(crate) fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
     let mut result = Vec::new();
     let mut current: Option<Interval> = None;
     let mut word: u32 = 0;
