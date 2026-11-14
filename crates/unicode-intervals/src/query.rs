@@ -44,6 +44,7 @@ pub fn query(
             categories.into_value(),
             min_codepoint,
             max_codepoint,
+            true,
         )
     } else if min_codepoint == 0 && max_codepoint == MAX_CODEPOINT {
         intervals_for_set(version, categories).into_owned()
@@ -240,7 +241,17 @@ static RUNS: [&[u32]; 11] = runs!(
 /// Membership bits of 64 runs at a time: a bit that differs from the previous one is where
 /// an interval starts or ends.
 #[allow(clippy::arithmetic_side_effects)]
-fn union_runs(runs: &[u32], mask: u32, min_codepoint: u32, max_codepoint: u32) -> Vec<Interval> {
+fn union_runs(
+    runs: &[u32],
+    mask: u32,
+    min_codepoint: u32,
+    max_codepoint: u32,
+    simd: bool,
+) -> Vec<Interval> {
+    #[cfg(target_arch = "x86_64")]
+    let simd = simd && std::arch::is_x86_feature_detected!("avx2");
+    #[cfg(not(target_arch = "x86_64"))]
+    let _ = simd;
     // The first run starts at 0, so there is always one starting at or below `min_codepoint`.
     let start = runs.partition_point(|&run| run >> CATEGORY_BITS <= min_codepoint) - 1;
     let end = runs.partition_point(|&run| run >> CATEGORY_BITS <= max_codepoint);
@@ -249,9 +260,14 @@ fn union_runs(runs: &[u32], mask: u32, min_codepoint: u32, max_codepoint: u32) -
     let mut left = 0;
     let mut previous = 0;
     for chunk in runs.chunks(64) {
-        let members = chunk.iter().rev().fold(0u64, |members, &run| {
-            members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
-        });
+        let members = match <&[u32; 64]>::try_from(chunk) {
+            #[cfg(target_arch = "x86_64")]
+            // SAFETY: AVX2 support is checked above.
+            Ok(chunk) if simd => unsafe { members_avx2(chunk, mask) },
+            _ => chunk.iter().rev().fold(0u64, |members, &run| {
+                members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
+            }),
+        };
         let mut edges = (members ^ (members << 1 | previous)) & (u64::MAX >> (64 - chunk.len()));
         previous = members >> (chunk.len() - 1);
         while edges != 0 {
@@ -270,6 +286,34 @@ fn union_runs(runs: &[u32], mask: u32, min_codepoint: u32, max_codepoint: u32) -
         intervals.push((left, max_codepoint));
     }
     intervals
+}
+
+/// Membership bits of 64 runs, 8 per instruction: shift each run's category bit of `mask`
+/// into the sign position and collect the signs.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+unsafe fn members_avx2(chunk: &[u32; 64], mask: u32) -> u64 {
+    use std::arch::x86_64::{
+        _mm256_andnot_si256, _mm256_castsi256_ps, _mm256_loadu_si256, _mm256_movemask_ps,
+        _mm256_set1_epi32, _mm256_sllv_epi32,
+    };
+    let mask = _mm256_set1_epi32(mask as i32);
+    let category_mask = _mm256_set1_epi32(CATEGORY_MASK as i32);
+    let mut members = 0u64;
+    for (idx, lanes) in chunk.chunks_exact(8).enumerate() {
+        // SAFETY: `lanes` holds 8 `u32`, exactly one unaligned 256-bit load.
+        let runs = unsafe { _mm256_loadu_si256(lanes.as_ptr().cast()) };
+        // `!run & 31` is `31 - category`.
+        let signs = _mm256_sllv_epi32(mask, _mm256_andnot_si256(runs, category_mask));
+        let bits = _mm256_movemask_ps(_mm256_castsi256_ps(signs)) as u32;
+        members |= u64::from(bits) << (idx * 8);
+    }
+    members
 }
 
 /// Codepoints below this bound fit in a 256-bit mask (`[u64; 4]`).
@@ -692,12 +736,16 @@ mod tests {
     fn test_union_runs() {
         let version = UnicodeVersion::V15_0_0;
         let runs = RUNS[version as usize];
+        // With and without SIMD.
         let check = |mask: u32, min_codepoint: u32, max_codepoint: u32| {
-            assert_eq!(
-                union_runs(runs, mask, min_codepoint, max_codepoint),
-                union_reference(version, mask, min_codepoint, max_codepoint),
-                "mask={mask:#x} range=({min_codepoint},{max_codepoint})"
-            );
+            let expected = union_reference(version, mask, min_codepoint, max_codepoint);
+            for simd in [false, true] {
+                assert_eq!(
+                    union_runs(runs, mask, min_codepoint, max_codepoint, simd),
+                    expected,
+                    "mask={mask:#x} range=({min_codepoint},{max_codepoint}) simd={simd}"
+                );
+            }
         };
         let mut state = 0x1234_5678_9abc_def0u64;
         let mut next = || {
