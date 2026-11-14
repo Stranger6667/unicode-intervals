@@ -104,16 +104,11 @@ fn collect_in_range(
         ALL_CATEGORIES => vec![(min_codepoint, max_codepoint)],
         value => {
             let table = version.table();
-            let mut intervals = Vec::new();
             if categories.len() == 1 {
                 let category_idx = value.trailing_zeros() as usize;
-                extend_clamped(
-                    &mut intervals,
-                    table[category_idx],
-                    min_codepoint,
-                    max_codepoint,
-                );
+                clamped(table[category_idx], min_codepoint, max_codepoint)
             } else {
+                let mut intervals = Vec::new();
                 for category in categories.iter() {
                     extend_clamped(
                         &mut intervals,
@@ -122,14 +117,48 @@ fn collect_in_range(
                         max_codepoint,
                     );
                 }
+                intervals
             }
-            intervals
         }
     }
 }
 
 /// Below this length, scanning the prefix is cheaper than a `log2(n)` search for the start.
 const BINARY_SEARCH_THRESHOLD: usize = 32;
+
+/// Skip the leading intervals below `min_codepoint`. Only search when it can pay off.
+fn skip_below(table: &[Interval], min_codepoint: u32) -> &[Interval] {
+    match table.first() {
+        Some(&(_, right)) if right < min_codepoint && table.len() >= BINARY_SEARCH_THRESHOLD => {
+            &table[table.partition_point(|&(_, right)| right < min_codepoint)..]
+        }
+        _ => table,
+    }
+}
+
+/// Intervals of `table` overlapping `[min_codepoint, max_codepoint]`, clamped to it.
+/// `table` is sorted and non-overlapping, so a long overlap is one contiguous slice:
+/// copy it in bulk and clamp its ends.
+fn clamped(table: &[Interval], min_codepoint: u32, max_codepoint: u32) -> Vec<Interval> {
+    let table = skip_below(table, min_codepoint);
+    match table.get(BINARY_SEARCH_THRESHOLD.saturating_sub(1)) {
+        Some(&(left, _)) if left <= max_codepoint => {
+            let end = table.partition_point(|&(left, _)| left <= max_codepoint);
+            let mut intervals = table[..end].to_vec();
+            // The probe matched, so `end >= BINARY_SEARCH_THRESHOLD`.
+            #[allow(clippy::arithmetic_side_effects)]
+            let last = end - 1;
+            intervals[0].0 = max(intervals[0].0, min_codepoint);
+            intervals[last].1 = min(intervals[last].1, max_codepoint);
+            intervals
+        }
+        _ => {
+            let mut intervals = Vec::new();
+            extend_clamped(&mut intervals, table, min_codepoint, max_codepoint);
+            intervals
+        }
+    }
+}
 
 /// Append intervals overlapping `[min_codepoint, max_codepoint]`, clamped to it.
 /// `table` is sorted and non-overlapping, so binary search past the leading intervals below
@@ -140,13 +169,7 @@ fn extend_clamped(
     min_codepoint: u32,
     max_codepoint: u32,
 ) {
-    let start = match table.first() {
-        Some(&(_, right)) if right < min_codepoint && table.len() >= BINARY_SEARCH_THRESHOLD => {
-            table.partition_point(|&(_, right)| right < min_codepoint)
-        }
-        _ => 0,
-    };
-    for &(left, right) in &table[start..] {
+    for &(left, right) in skip_below(table, min_codepoint) {
         if left > max_codepoint {
             break;
         }
@@ -475,6 +498,36 @@ mod tests {
             min_codepoint,
             max_codepoint,
         );
+    }
+
+    // Tables on both sides of `BINARY_SEARCH_THRESHOLD`, every range around their bounds.
+    #[test]
+    fn test_clamped() {
+        for len in [0_u32, 1, 2, 31, 32, 33, 70] {
+            // Intervals `(10 * i + 3, 10 * i + 6)`: gaps on both sides of each one.
+            let table: Vec<Interval> = (0..len).map(|i| (10 * i + 3, 10 * i + 6)).collect();
+            let bound = 10 * len + 10;
+            for min_codepoint in 0..bound {
+                for max_codepoint in min_codepoint..bound {
+                    let expected: Vec<Interval> = table
+                        .iter()
+                        .filter(|&&(left, right)| left <= max_codepoint && right >= min_codepoint)
+                        .map(|&(left, right)| (left.max(min_codepoint), right.min(max_codepoint)))
+                        .collect();
+                    assert_eq!(
+                        clamped(&table, min_codepoint, max_codepoint),
+                        expected,
+                        "len={len} range=({min_codepoint},{max_codepoint})"
+                    );
+                    let mut extended = Vec::new();
+                    extend_clamped(&mut extended, &table, min_codepoint, max_codepoint);
+                    assert_eq!(
+                        extended, expected,
+                        "len={len} range=({min_codepoint},{max_codepoint})"
+                    );
+                }
+            }
+        }
     }
 
     // The bitset fast path must agree with the per-codepoint oracle across every small-range
