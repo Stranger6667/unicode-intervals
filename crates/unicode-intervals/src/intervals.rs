@@ -26,6 +26,37 @@ pub fn from_str(string: &str) -> Vec<Interval> {
     intervals
 }
 
+/// Union of two sorted sets of non-overlapping, non-adjacent intervals.
+/// Bulk-copies the runs of `left` between the intervals of `right`, which is usually tiny.
+#[must_use]
+// Practically all interval values are < u32::MAX
+#[allow(clippy::arithmetic_side_effects)]
+pub fn union(left: &[Interval], right: &[Interval]) -> Vec<Interval> {
+    // Only the leading intervals of `slice` can touch what is already in `result`.
+    fn extend(result: &mut Vec<Interval>, slice: &[Interval]) {
+        let mut absorbed = 0;
+        if let Some(last) = result.last_mut() {
+            while absorbed < slice.len() && slice[absorbed].0 <= last.1 + 1 {
+                last.1 = last.1.max(slice[absorbed].1);
+                absorbed += 1;
+            }
+        }
+        result.extend_from_slice(&slice[absorbed..]);
+    }
+    let mut result = Vec::with_capacity(left.len() + right.len());
+    let mut rest = left;
+    for interval in right {
+        // Intervals of `left` starting at or before this one go first.
+        let (before, after) =
+            rest.split_at(rest.partition_point(|&(start, _)| start <= interval.0));
+        extend(&mut result, before);
+        extend(&mut result, core::slice::from_ref(interval));
+        rest = after;
+    }
+    extend(&mut result, rest);
+    result
+}
+
 /// Subtract `right` set of intervals from `left`.
 #[inline]
 // Practically all interval values are < u32::MAX
@@ -111,6 +142,52 @@ mod tests {
         left.extend_from_slice(right);
         merge(&mut left);
         assert_eq!(left, expected);
+    }
+
+    #[test_case(&[], &[], &[]; "empty both")]
+    #[test_case(&[], &[(1, 2)], &[(1, 2)]; "empty left")]
+    #[test_case(&[(1, 2)], &[], &[(1, 2)]; "empty right")]
+    #[test_case(&[(2, 3)], &[(1, 2), (4, 5)], &[(1, 5)]; "bridge both sides")]
+    #[test_case(&[(3, 3)], &[(1, 2), (5, 5)], &[(1, 3), (5, 5)]; "adjacent on one side")]
+    #[test_case(&[(0, 5), (10, 15), (20, 25)], &[(7, 8)], &[(0, 5), (7, 8), (10, 15), (20, 25)]; "in a gap")]
+    #[test_case(&[(0, 5), (10, 15), (20, 25), (30, 35)], &[(4, 22)], &[(0, 25), (30, 35)]; "swallow several")]
+    #[test_case(&[(0, 5), (10, 15)], &[(12, 13)], &[(0, 5), (10, 15)]; "contained")]
+    #[test_case(&[(10, 15)], &[(0, 1), (3, 4), (20, 21), (30, 30)], &[(0, 1), (3, 4), (10, 15), (20, 21), (30, 30)]; "around")]
+    #[test_case(&[(0, 5), (10, 15)], &[(6, 9)], &[(0, 15)]; "fill the gap exactly")]
+    fn test_union(left: &[Interval], right: &[Interval], expected: &[Interval]) {
+        assert_eq!(union(left, right), expected);
+        assert_eq!(union(right, left), expected);
+    }
+
+    // Reference: concatenate, then sort + merge.
+    #[test]
+    fn test_union_against_merge() {
+        fn next(state: &mut u64, bound: u32) -> u32 {
+            *state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (*state >> 33) as u32 % bound
+        }
+        // Sorted, non-overlapping, non-adjacent intervals, as `union` expects.
+        fn random(state: &mut u64, max_count: u32) -> Vec<Interval> {
+            let mut intervals: Vec<Interval> = (0..next(state, max_count))
+                .map(|_| {
+                    let left = next(state, 400);
+                    (left, left + next(state, 6))
+                })
+                .collect();
+            merge(&mut intervals);
+            intervals
+        }
+        let mut state = 0x1234_5678_9abc_def0u64;
+        for _ in 0..20_000 {
+            let left = random(&mut state, 40);
+            let right = random(&mut state, 8);
+            let mut expected = left.clone();
+            expected.extend_from_slice(&right);
+            merge(&mut expected);
+            assert_eq!(union(&left, &right), expected, "{left:?} | {right:?}");
+        }
     }
 
     #[test_case(vec![(0, 1)], &[], &[(0, 1)])]

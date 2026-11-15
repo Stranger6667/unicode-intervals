@@ -38,26 +38,30 @@ pub fn query(
     let include_intervals = intervals::from_str(include_characters);
     let exclude_intervals = intervals::from_str(exclude_characters);
 
-    let mut intervals = if categories.len() > 1 && categories.into_value() != ALL_CATEGORIES {
-        union_runs(
+    let intervals = if categories.len() > 1 && categories.into_value() != ALL_CATEGORIES {
+        Cow::Owned(union_runs(
             RUNS[version as usize],
             categories.into_value(),
             min_codepoint,
             max_codepoint,
             true,
-        )
+        ))
     } else if min_codepoint == 0 && max_codepoint == MAX_CODEPOINT {
-        intervals_for_set(version, categories).into_owned()
+        intervals_for_set(version, categories)
     } else {
-        collect_in_range(version, categories, min_codepoint, max_codepoint)
+        Cow::Owned(collect_in_range(
+            version,
+            categories,
+            min_codepoint,
+            max_codepoint,
+        ))
     };
     // Include intervals
-    if intervals.is_empty() {
-        intervals = include_intervals;
-    } else if !include_intervals.is_empty() {
-        intervals.extend_from_slice(&include_intervals);
-        intervals::merge(&mut intervals);
-    }
+    let intervals = if include_intervals.is_empty() {
+        intervals.into_owned()
+    } else {
+        intervals::union(&intervals, &include_intervals)
+    };
     // Exclude intervals
     intervals::subtract(intervals, exclude_intervals.as_slice())
 }
