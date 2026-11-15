@@ -124,6 +124,32 @@ fn query(c: &mut Criterion) {
                 .intervals()
         })
     });
+    // Custom characters on top of a large category set: the union must stay sorted and merged.
+    c.bench_function("query - single category - include chars", |b| {
+        b.iter(|| {
+            version
+                .query()
+                .include_categories(black_box(UnicodeCategory::Lo))
+                .include_characters(black_box("abc\u{2603}"))
+                .intervals()
+        })
+    });
+    c.bench_function("query - multiple categories - include chars", |b| {
+        b.iter(|| {
+            version
+                .query()
+                .include_categories(black_box(
+                    UnicodeCategory::Lu
+                        | UnicodeCategory::Ll
+                        | UnicodeCategory::Lo
+                        | UnicodeCategory::Nd
+                        | UnicodeCategory::Po
+                        | UnicodeCategory::Sm,
+                ))
+                .include_characters(black_box("_-\u{2603}"))
+                .intervals()
+        })
+    });
     let exclude_categories = black_box(UnicodeCategory::Lu);
     let min_codepoint = black_box(0);
     let max_codepoint = black_box(128);
