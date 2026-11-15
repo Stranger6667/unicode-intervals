@@ -20,5 +20,4 @@ unicode_intervals_core = { package = "unicode-intervals", path = "../unicode-int
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
 
 [build-dependencies]
-built = { version = "=0.8.0", features = ["cargo-lock", "chrono"] }
 pyo3-build-config = { version = "0.30", features = ["resolve-config"] }
