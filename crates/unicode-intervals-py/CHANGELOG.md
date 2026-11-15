@@ -5,10 +5,12 @@
 ### Added
 
 - Support for Unicode 18.0.0.
+- Support for Python 3.15, including free-threaded wheels.
 
 ### Changed
 
 - **BREAKING**: `UnicodeVersion.latest()` and the default `version` are Unicode 18.0.0.
+- `repr()` of `UnicodeVersion` is `UnicodeVersion.V16_0_0` instead of `UnicodeVersion("16.0.0")`: the custom `__repr__` made free-threaded Python 3.15 emit a `DeprecationWarning` at import.
 
 ### Performance
 

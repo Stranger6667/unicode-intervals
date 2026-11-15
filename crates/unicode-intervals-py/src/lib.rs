@@ -93,9 +93,6 @@ impl PyUnicodeVersion {
     fn __str__(&self) -> &'static str {
         CoreVersion::from(*self).as_str()
     }
-    fn __repr__(&self) -> String {
-        format!("UnicodeVersion(\"{}\")", CoreVersion::from(*self).as_str())
-    }
 }
 
 fn parse_categories(names: Option<&Bound<'_, PyAny>>) -> PyResult<Option<UnicodeCategorySet>> {

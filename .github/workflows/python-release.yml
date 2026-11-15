@@ -135,7 +135,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-freethreaded-${{ matrix.target }}
@@ -152,7 +152,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_2
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-linux-musllinux-freethreaded-${{ matrix.target }}
@@ -166,14 +166,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
-      - run: uv python install 3.14t
+      - run: uv python install 3.14t 3.15t
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin,aarch64-apple-darwin
       - uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-macos-freethreaded-${{ matrix.target }}
@@ -184,14 +184,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v8.2.0
-      - run: uv python install 3.14t
+      - run: uv python install 3.14t 3.15t
       - id: python-paths
-        run: echo "py314t=$(uv python find 3.14t)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "py314t=$(uv python find 3.14t)" >> "$GITHUB_OUTPUT"
+          echo "py315t=$(uv python find 3.15t)" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
       - uses: messense/maturin-action@v1
         with:
           target: x64
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ steps.python-paths.outputs.py314t }}
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ steps.python-paths.outputs.py314t }} ${{ steps.python-paths.outputs.py315t }}
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-windows-freethreaded
