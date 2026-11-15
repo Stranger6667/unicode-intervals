@@ -1,10 +1,9 @@
 [package]
 name = "unicode-intervals"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Dmitry Dygalo <dmitry@dygalo.dev>"]
 edition = "2021"
 documentation = "https://github.com/Stranger6667/unicode-intervals"
-homepage = "https://github.com/Stranger6667/unicode-intervals"
 repository = "https://github.com/Stranger6667/unicode-intervals"
 license = "MIT OR Apache-2.0"
 rust-version = "1.85"

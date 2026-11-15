@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
 ### Performance
 
 - `query` with several categories scans a single partition table of all categories instead of concatenating and re-sorting per-category intervals (with AVX2 on x86-64), making such queries ~2-7x faster and excluding a single category over the full range ~120x faster.
@@ -64,7 +66,8 @@
 
 - Initial public release.
 
-[Unreleased]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.3.1...HEAD
+[Unreleased]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.4.0...HEAD
+[0.4.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.3.1...rust-v0.4.0
 [0.3.1]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.3.0...rust-v0.3.1
 [0.3.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.2.0...rust-v0.3.0
 [0.2.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.1.2...rust-v0.2.0
