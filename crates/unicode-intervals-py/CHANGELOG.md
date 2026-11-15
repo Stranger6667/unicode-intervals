@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Any iterable of category names (sets, generators, dict keys) in `categories` and `exclude_categories` of `query`.
+
 ### Removed
 
 - Free-threaded CPython 3.13 wheels.
+
+### Performance
+
+- Category names in `query` parsed without copying each one, ~2x less time per name.
 
 ## [0.3.1] - 2026-06-06
 
