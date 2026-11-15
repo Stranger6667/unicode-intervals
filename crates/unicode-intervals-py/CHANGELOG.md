@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Wheels for Linux on armv7, ppc64le, s390x and riscv64, for musllinux on i686, armv7, ppc64le and riscv64, and for Windows on ARM64.
+- PyPy 3.12 wheels, and PyPy wheels for macOS on x86-64.
+- Pyodide wheel on PyPI.
+- `abi3t` wheels: one per platform for CPython 3.15+, free-threaded builds included.
+
+### Changed
+
+- aarch64 manylinux wheels require glibc 2.17 instead of 2.28.
+
 ## [0.5.0] - 2026-11-15
 
 ### Added
