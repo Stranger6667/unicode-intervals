@@ -17,7 +17,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 unicode_intervals_core = { package = "unicode-intervals", path = "../unicode-intervals" }
-pyo3 = { version = "0.30", features = ["extension-module", "abi3-py310"] }
+pyo3 = { version = "0.30", features = ["extension-module"] }
+
+[features]
+default = ["abi3"]
+# One wheel per platform for CPython 3.10+.
+abi3 = ["pyo3/abi3-py310"]
+# One wheel per platform for CPython 3.15+, free-threaded builds included.
+abi3t = ["pyo3/abi3t-py315"]
 
 [build-dependencies]
 pyo3-build-config = { version = "0.30", features = ["resolve-config"] }

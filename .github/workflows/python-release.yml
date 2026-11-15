@@ -15,12 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PACKAGE_NAME: unicode_intervals
   MANIFEST: crates/unicode-intervals-py/Cargo.toml
-  # Single abi3 wheel per platform covers CPython 3.10+
-  PYTHON_ABI_VERSION: "3.10"
-  PYPY_VERSION: "pypy3.11"
-  PYODIDE_RUST_TOOLCHAIN: "nightly-2025-06-27"
 
 jobs:
   sdist:
@@ -34,262 +29,138 @@ jobs:
           name: sdist
           path: dist
 
-  macos:
-    runs-on: macos-15
-    strategy:
-      matrix:
-        include:
-          - target: x86_64
-            artifact: wheel-macos-x86_64
-          - target: universal2-apple-darwin
-            artifact: wheel-macos-universal
-    steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.2.0
-      - run: uv python install ${{ env.PYTHON_ABI_VERSION }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist
-
-  windows:
-    runs-on: windows-2025
-    strategy:
-      matrix:
-        target: [x64, x86]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_ABI_VERSION }}
-          architecture: ${{ matrix.target }}
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-windows-${{ matrix.target }}
-          path: dist
-
-  linux:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        include:
-          - target: x86_64
-            manylinux: auto
-          - target: i686
-            manylinux: auto
-          - target: aarch64
-            manylinux: 2_28
-    steps:
-      - uses: actions/checkout@v6
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          manylinux: ${{ matrix.manylinux }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-linux-${{ matrix.target }}
-          path: dist
-
-  linux-musllinux:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        target: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          manylinux: musllinux_1_2
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_ABI_VERSION }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-linux-musllinux-${{ matrix.target }}
-          path: dist
-
-  linux-freethreaded:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        include:
-          - target: x86_64
-            manylinux: auto
-          - target: aarch64
-            manylinux: 2_28
-    steps:
-      - uses: actions/checkout@v6
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          manylinux: ${{ matrix.manylinux }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-linux-freethreaded-${{ matrix.target }}
-          path: dist
-
-  linux-musllinux-freethreaded:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        target: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          manylinux: musllinux_1_2
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-linux-musllinux-freethreaded-${{ matrix.target }}
-          path: dist
-
-  macos-freethreaded:
-    runs-on: macos-15
-    strategy:
-      matrix:
-        target: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.2.0
-      - run: uv python install 3.14t 3.15t
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
-      - uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter 3.14t 3.15t
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-macos-freethreaded-${{ matrix.target }}
-          path: dist
-
-  windows-freethreaded:
-    runs-on: windows-2025
-    steps:
-      - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.2.0
-      - run: uv python install 3.14t 3.15t
-      - id: python-paths
-        run: |
-          echo "py314t=$(uv python find 3.14t)" >> "$GITHUB_OUTPUT"
-          echo "py315t=$(uv python find 3.15t)" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: messense/maturin-action@v1
-        with:
-          target: x64
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ steps.python-paths.outputs.py314t }} ${{ steps.python-paths.outputs.py315t }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel-windows-freethreaded
-          path: dist
-
-  pypy:
+  # Every target gets an `abi3` wheel (CPython 3.10+) and an `abi3t` wheel (CPython 3.15+,
+  # free-threaded included). Targets with `interpreter` also get wheels for the interpreters
+  # neither of those covers: free-threaded 3.14 and PyPy.
+  wheels:
+    name: wheels (${{ matrix.os }} / ${{ matrix.target }} / ${{ matrix.manylinux }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            target: aarch64
-            artifact: wheel-macos-pypy
-            manylinux: ''
-          - os: windows-2025
-            target: x64
-            artifact: wheel-windows-pypy
-            manylinux: ''
           - os: ubuntu-24.04
             target: x86_64
-            artifact: wheel-linux-pypy
             manylinux: auto
+            interpreter: python3.14t pypy3.11 pypy3.12
+          - os: ubuntu-24.04
+            target: x86_64
+            manylinux: musllinux_1_2
+            interpreter: python3.14t
           - os: ubuntu-24.04
             target: aarch64
-            artifact: wheel-linux-pypy-aarch64
-            manylinux: 2_28
+            manylinux: auto
+            interpreter: python3.14t pypy3.11 pypy3.12
+          - os: ubuntu-24.04
+            target: aarch64
+            manylinux: musllinux_1_2
+            interpreter: python3.14t
+          - os: macos-15
+            target: x86_64
+            manylinux: ''
+            interpreter: python3.14t pypy3.11 pypy3.12
+          - os: macos-15
+            target: aarch64
+            manylinux: ''
+            interpreter: python3.14t pypy3.11 pypy3.12
+          - os: windows-2025
+            target: x64
+            manylinux: ''
+            interpreter: python3.14t pypy3.11 pypy3.12
+          - os: ubuntu-24.04
+            target: i686
+            manylinux: auto
+          - os: ubuntu-24.04
+            target: i686
+            manylinux: musllinux_1_2
+          - os: ubuntu-24.04
+            target: armv7
+            manylinux: auto
+          - os: ubuntu-24.04
+            target: armv7
+            manylinux: musllinux_1_2
+          - os: ubuntu-24.04
+            target: riscv64
+            manylinux: auto
+          - os: ubuntu-24.04
+            target: riscv64
+            manylinux: musllinux_1_2
+          - os: ubuntu-24.04
+            target: ppc64le
+            manylinux: auto
+          - os: ubuntu-24.04
+            target: ppc64le
+            manylinux: musllinux_1_2
+          - os: ubuntu-24.04
+            target: s390x
+            manylinux: auto
+          - os: windows-2025
+            target: x86
+            python-architecture: x86
+            manylinux: ''
+          - os: windows-11-arm
+            target: aarch64
+            manylinux: ''
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: ${{ env.PYPY_VERSION }}
-      - name: Resolve interpreter path
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            python_path=$(python -c "import sys; print(sys.executable)")
-          else
-            python_path=$(which python || which python3)
-          fi
-          echo "PYTHON_PATH=$python_path" >> "$GITHUB_ENV"
-          "$python_path" --version
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build wheels - PyPy (manylinux)
-        if: ${{ matrix.manylinux != '' }}
-        uses: messense/maturin-action@v1
+          python-version: '3.13'
+          architecture: ${{ matrix.python-architecture }}
+      - name: Build wheels for free-threaded 3.14 and PyPy
+        if: ${{ matrix.interpreter }}
+        uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYPY_VERSION }}
-      - name: Build wheels - PyPy
-        if: ${{ matrix.manylinux == '' }}
-        uses: messense/maturin-action@v1
+          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ matrix.interpreter }}
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release -m ${{ env.MANIFEST }} --out dist --interpreter ${{ env.PYTHON_PATH }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release -m ${{ env.MANIFEST }} --out dist
+      - uses: actions/setup-python@v6
+        id: abi3t-python
+        with:
+          python-version: '3.15'
+          architecture: ${{ matrix.python-architecture }}
+      - name: Build abi3t wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: >-
+            --release -m ${{ env.MANIFEST }} --out dist --no-default-features --features abi3t
+            --interpreter ${{ matrix.manylinux && 'python3.15' || steps.abi3t-python.outputs.python-path }}
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}
-          path: dist
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}-${{ matrix.manylinux }}
+          if-no-files-found: error
+          path: dist/*.whl
 
   pyodide:
     runs-on: ubuntu-24.04
+    env:
+      PYODIDE_VERSION: 314.0.7
+      PYODIDE_BUILD_VERSION: 0.39.2
+      PYODIDE_PYTHON_VERSION: 3.14.2
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
-          components: rust-src
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
-      - run: |
-          pip install "pyodide-build>=0.28.0"
-          echo "EMSCRIPTEN_VERSION=$(pyodide config get emscripten_version)" >> "$GITHUB_ENV"
-      - uses: mymindstorm/setup-emsdk@v16
-        with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
-      - name: Install Pyodide Rust sysroot
+          python-version: ${{ env.PYODIDE_PYTHON_VERSION }}
+      - name: Install pyodide-build and the Pyodide cross-build environment
         run: |
-          toolchain_root=$(rustup run "${{ env.PYODIDE_RUST_TOOLCHAIN }}" rustc --print sysroot)
-          rustlib="$toolchain_root/lib/rustlib"
-          sysroot_tag="emcc-${EMSCRIPTEN_VERSION}_${{ env.PYODIDE_RUST_TOOLCHAIN }}"
-          curl -fsSL --retry 5 --retry-all-errors \
-            -o "/tmp/${sysroot_tag}.tar.bz2" \
-            "https://github.com/pyodide/rust-emscripten-wasm-eh-sysroot/releases/download/${sysroot_tag}/${sysroot_tag}.tar.bz2"
-          tar -xjf "/tmp/${sysroot_tag}.tar.bz2" --directory="$rustlib"
-      - run: pyodide build
-        working-directory: crates/unicode-intervals-py
-        env:
-          RUSTUP_TOOLCHAIN: ${{ env.PYODIDE_RUST_TOOLCHAIN }}
-          RUSTFLAGS: "-C link-arg=-sSIDE_MODULE=2 -Z link-native-libraries=no -Z emscripten-wasm-eh"
+          pip install pyodide-build==${{ env.PYODIDE_BUILD_VERSION }}
+          pyodide xbuildenv install ${{ env.PYODIDE_VERSION }}
+      - run: rustup target add wasm32-unknown-emscripten
+      - run: pyodide build crates/unicode-intervals-py --outdir dist
       - uses: actions/upload-artifact@v7
         with:
-          name: wheel-pyodide
+          name: wheels-pyodide
           if-no-files-found: error
-          path: crates/unicode-intervals-py/dist
+          path: dist/*.whl
 
   release:
     name: Release
@@ -297,15 +168,7 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/')"
     needs:
       - sdist
-      - macos
-      - windows
-      - linux
-      - linux-musllinux
-      - linux-freethreaded
-      - linux-musllinux-freethreaded
-      - macos-freethreaded
-      - windows-freethreaded
-      - pypy
+      - wheels
       - pyodide
     environment: pypi
     permissions:
@@ -314,17 +177,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          path: all
-      - name: Collect wheels (pyodide kept out of the PyPI set)
-        run: |
-          mkdir dist dist-pyodide
-          for dir in all/*/; do
-            if [[ "$dir" == *pyodide* ]]; then
-              cp "$dir"* dist-pyodide/
-            else
-              cp "$dir"* dist/
-            fi
-          done
+          path: dist
+          merge-multiple: true
+      - run: ls -la dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
       - name: Extract version
@@ -335,6 +190,4 @@ jobs:
           make_latest: false
           draft: true
           name: "[Python] Release ${{ env.version }}"
-          files: |
-            dist/*
-            dist-pyodide/*
+          files: dist/*
