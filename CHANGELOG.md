@@ -9,6 +9,7 @@
 ### Changed
 
 - **BREAKING**: `UnicodeVersion::latest()` now returns `UnicodeVersion::V18_0_0`.
+- **BREAKING**: Bump the Minimum Supported Rust Version to 1.89.
 
 ### Performance
 

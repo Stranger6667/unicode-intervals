@@ -286,11 +286,11 @@ fn union_runs(
                     intervals.push((left, boundaries[0] - 1));
                     boundaries = &boundaries[1..];
                 }
-                let pairs = boundaries.chunks_exact(2);
-                if let [start] = pairs.remainder() {
+                let (pairs, rest) = boundaries.as_chunks::<2>();
+                if let [start] = rest {
                     left = *start;
                 }
-                intervals.extend(pairs.map(|pair| (pair[0], pair[1] - 1)));
+                intervals.extend(pairs.iter().map(|&[start, end]| (start, end - 1)));
                 edges = 0;
             }
         }
@@ -355,7 +355,7 @@ unsafe fn members_neon(chunk: &[u32; 64], mask: u32) -> u64 {
     // SAFETY: both arrays hold 4 `u32`, exactly one 128-bit load each.
     let (lanes, lane_bits) = unsafe { (vld1q_u32(LANES.as_ptr()), vld1q_u32(LANE_BITS.as_ptr())) };
     let mut members = 0u64;
-    for (idx, quad) in chunk.chunks_exact(4).enumerate() {
+    for (idx, quad) in chunk.as_chunks::<4>().0.iter().enumerate() {
         // SAFETY: `quad` holds 4 `u32`, exactly one 128-bit load.
         let runs = unsafe { vld1q_u32(quad.as_ptr()) };
         let categories = vandq_u32(runs, category_mask);
@@ -412,7 +412,7 @@ unsafe fn boundaries_neon(
     };
     let min_codepoint = vdupq_n_u32(min_codepoint);
     let mut count = 0;
-    for (idx, quad) in chunk.chunks_exact(4).enumerate() {
+    for (idx, quad) in chunk.as_chunks::<4>().0.iter().enumerate() {
         let selected = (edges >> (idx * 4)) as usize & 0xF;
         // SAFETY: `quad` holds 4 `u32`, exactly one 128-bit load.
         let runs = unsafe { vld1q_u32(quad.as_ptr()) };
@@ -445,7 +445,7 @@ unsafe fn members_avx2(chunk: &[u32; 64], mask: u32) -> u64 {
     let mask = _mm256_set1_epi32(mask as i32);
     let category_mask = _mm256_set1_epi32(CATEGORY_MASK as i32);
     let mut members = 0u64;
-    for (idx, lanes) in chunk.chunks_exact(8).enumerate() {
+    for (idx, lanes) in chunk.as_chunks::<8>().0.iter().enumerate() {
         // SAFETY: `lanes` holds 8 `u32`, exactly one unaligned 256-bit load.
         let runs = unsafe { _mm256_loadu_si256(lanes.as_ptr().cast()) };
         // `!run & 31` is `31 - category`.
@@ -502,7 +502,7 @@ unsafe fn boundaries_avx2(
     };
     let min_codepoint = _mm256_set1_epi32(min_codepoint as i32);
     let mut count = 0;
-    for (idx, lanes) in chunk.chunks_exact(8).enumerate() {
+    for (idx, lanes) in chunk.as_chunks::<8>().0.iter().enumerate() {
         let selected = (edges >> (idx * 8)) as u8;
         // SAFETY: `lanes` holds 8 `u32`, exactly one unaligned 256-bit load.
         let runs = unsafe { _mm256_loadu_si256(lanes.as_ptr().cast()) };
