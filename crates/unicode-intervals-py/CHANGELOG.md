@@ -13,6 +13,9 @@
 ### Performance
 
 - Category names in `query` parsed without copying each one, ~2x less time per name.
+- `query` with several categories scans a single partition table of all categories instead of concatenating and re-sorting per-category intervals (with AVX2 on x86-64).
+- `query` with `include_characters` on top of categories merges the characters into the sorted result instead of re-sorting it.
+- `query` with a single category and a codepoint range copies the matching intervals in bulk.
 
 ## [0.3.1] - 2026-06-06
 

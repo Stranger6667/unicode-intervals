@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Performance
+
+- `query` with several categories scans a single partition table of all categories instead of concatenating and re-sorting per-category intervals (with AVX2 on x86-64), making such queries ~2-7x faster and excluding a single category over the full range ~120x faster.
+- `query` with `include_characters` on top of categories merges the characters into the sorted result instead of re-sorting it, making such queries up to ~14x faster.
+- `query` with a single category and a codepoint range copies the matching intervals in bulk, making wide ranges up to ~6x faster.
+- `include_characters` and `exclude_characters` below U+0100 are collected through a 256-bit bitset, making them ~3-4x faster to process.
+- `query` with a few `exclude_characters` on a large set copies the untouched intervals in bulk, making the exclusion ~2.5x faster.
+- `UnicodeVersion::normalized_categories` returns a table precomputed per version instead of sorting on every call.
+
 ## [0.3.1] - 2026-06-06
 
 ### Performance
