@@ -10,6 +10,7 @@
 ### Changed
 
 - **BREAKING**: `UnicodeVersion.latest()` and the default `version` are Unicode 18.0.0.
+- Building from source requires Rust 1.89.
 - `repr()` of `UnicodeVersion` is `UnicodeVersion.V16_0_0` instead of `UnicodeVersion("16.0.0")`: the custom `__repr__` made free-threaded Python 3.15 emit a `DeprecationWarning` at import.
 
 ### Performance
