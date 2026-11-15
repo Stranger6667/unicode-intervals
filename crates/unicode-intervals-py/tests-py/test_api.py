@@ -33,6 +33,16 @@ def test_available_versions_roundtrip():
         assert unicode_intervals.UnicodeVersion(str(version)) == version
 
 
+def test_version_is_hashable():
+    v16 = unicode_intervals.UnicodeVersion("16.0.0")
+    assert hash(v16) == hash(unicode_intervals.UnicodeVersion.V16_0_0)
+    assert {v16, unicode_intervals.UnicodeVersion.V16_0_0, unicode_intervals.UnicodeVersion.latest()} == {
+        v16,
+        unicode_intervals.UnicodeVersion.latest(),
+    }
+    assert {v16: "sixteen"}[unicode_intervals.UnicodeVersion("16.0.0")] == "sixteen"
+
+
 def test_query_examples():
     assert unicode_intervals.query() == ((0, 1114111),)
     assert unicode_intervals.query(min_codepoint=0, max_codepoint=128) == ((0, 128),)
