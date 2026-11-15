@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-15
+
 ### Added
 
 - Wheels for Linux on armv7, ppc64le, s390x and riscv64, for musllinux on i686, armv7, ppc64le and riscv64, and for Windows on ARM64.
