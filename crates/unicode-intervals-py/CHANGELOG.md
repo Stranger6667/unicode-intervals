@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
 ### Added
 
 - Any iterable of category names (sets, generators, dict keys) in `categories` and `exclude_categories` of `query`.
