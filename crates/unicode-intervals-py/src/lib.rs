@@ -32,6 +32,7 @@ enum PyUnicodeVersion {
     V15_1_0,
     V16_0_0,
     V17_0_0,
+    V18_0_0,
 }
 
 impl From<PyUnicodeVersion> for CoreVersion {
@@ -48,6 +49,7 @@ impl From<PyUnicodeVersion> for CoreVersion {
             PyUnicodeVersion::V15_1_0 => CoreVersion::V15_1_0,
             PyUnicodeVersion::V16_0_0 => CoreVersion::V16_0_0,
             PyUnicodeVersion::V17_0_0 => CoreVersion::V17_0_0,
+            PyUnicodeVersion::V18_0_0 => CoreVersion::V18_0_0,
         }
     }
 }
@@ -66,6 +68,7 @@ impl From<CoreVersion> for PyUnicodeVersion {
             CoreVersion::V15_1_0 => PyUnicodeVersion::V15_1_0,
             CoreVersion::V16_0_0 => PyUnicodeVersion::V16_0_0,
             CoreVersion::V17_0_0 => PyUnicodeVersion::V17_0_0,
+            CoreVersion::V18_0_0 => PyUnicodeVersion::V18_0_0,
             // `CoreVersion` is non-exhaustive; fail loud instead of mismapping a new version.
             _ => unreachable!("core Unicode version not mirrored in the binding"),
         }

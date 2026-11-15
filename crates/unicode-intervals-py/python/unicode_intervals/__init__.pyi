@@ -12,6 +12,7 @@ class UnicodeVersion:
     V15_1_0: UnicodeVersion
     V16_0_0: UnicodeVersion
     V17_0_0: UnicodeVersion
+    V18_0_0: UnicodeVersion
     def __new__(cls, value: str) -> UnicodeVersion: ...
     @staticmethod
     def latest() -> UnicodeVersion: ...

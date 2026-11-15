@@ -83,7 +83,7 @@
 //!
 //! # Unicode version support
 //!
-//! `unicode-intervals` supports Unicode 9.0.0 - 17.0.0.
+//! `unicode-intervals` supports Unicode 9.0.0 - 18.0.0.
 #![warn(
     clippy::cast_possible_truncation,
     clippy::doc_markdown,
@@ -168,6 +168,8 @@ pub enum UnicodeVersion {
     V16_0_0,
     /// Unicode 17.0.0
     V17_0_0,
+    /// Unicode 18.0.0
+    V18_0_0,
 }
 
 impl fmt::Display for UnicodeVersion {
@@ -192,14 +194,15 @@ impl FromStr for UnicodeVersion {
             "15.1.0" => Ok(UnicodeVersion::V15_1_0),
             "16.0.0" => Ok(UnicodeVersion::V16_0_0),
             "17.0.0" => Ok(UnicodeVersion::V17_0_0),
+            "18.0.0" => Ok(UnicodeVersion::V18_0_0),
             _ => Err(Error::InvalidVersion(s.to_string().into_boxed_str())),
         }
     }
 }
 
 /// `normalized_categories` for every bundled version, indexed by `UnicodeVersion as usize`.
-const NORMALIZED_CATEGORIES: [[UnicodeCategory; 30]; 11] = {
-    let mut output = [[UnicodeCategory::Cc; 30]; 11];
+const NORMALIZED_CATEGORIES: [[UnicodeCategory; 30]; 12] = {
+    let mut output = [[UnicodeCategory::Cc; 30]; 12];
     let mut idx = 0;
     // `idx` stays below 11, so the increment can't overflow.
     #[allow(clippy::arithmetic_side_effects)]
@@ -212,7 +215,7 @@ const NORMALIZED_CATEGORIES: [[UnicodeCategory; 30]; 11] = {
 
 impl UnicodeVersion {
     /// Every bundled Unicode version, oldest to newest.
-    pub const ALL: [UnicodeVersion; 11] = [
+    pub const ALL: [UnicodeVersion; 12] = [
         UnicodeVersion::V9_0_0,
         UnicodeVersion::V10_0_0,
         UnicodeVersion::V11_0_0,
@@ -224,6 +227,7 @@ impl UnicodeVersion {
         UnicodeVersion::V15_1_0,
         UnicodeVersion::V16_0_0,
         UnicodeVersion::V17_0_0,
+        UnicodeVersion::V18_0_0,
     ];
     /// Unicode version as a string.
     #[must_use]
@@ -240,12 +244,13 @@ impl UnicodeVersion {
             UnicodeVersion::V15_1_0 => "15.1.0",
             UnicodeVersion::V16_0_0 => "16.0.0",
             UnicodeVersion::V17_0_0 => "17.0.0",
+            UnicodeVersion::V18_0_0 => "18.0.0",
         }
     }
     /// Get the latest Unicode version.
     #[must_use]
     pub const fn latest() -> UnicodeVersion {
-        UnicodeVersion::V17_0_0
+        UnicodeVersion::V18_0_0
     }
     /// A sorted slice of slices where each item is a slice of intervals for every Unicode category.
     /// They are sorted alphabetically by their full name.
@@ -264,6 +269,7 @@ impl UnicodeVersion {
             UnicodeVersion::V15_1_0 => tables::v15_1_0::BY_NAME,
             UnicodeVersion::V16_0_0 => tables::v16_0_0::BY_NAME,
             UnicodeVersion::V17_0_0 => tables::v17_0_0::BY_NAME,
+            UnicodeVersion::V18_0_0 => tables::v18_0_0::BY_NAME,
         }
     }
 
@@ -499,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_all_versions() {
-        assert_eq!(UnicodeVersion::ALL.len(), 11);
+        assert_eq!(UnicodeVersion::ALL.len(), 12);
         assert_eq!(UnicodeVersion::ALL[0], UnicodeVersion::V9_0_0);
         assert_eq!(
             *UnicodeVersion::ALL.last().expect("non-empty"),
@@ -731,6 +737,7 @@ mod tests {
     #[test_case(UnicodeVersion::V15_1_0)]
     #[test_case(UnicodeVersion::V16_0_0)]
     #[test_case(UnicodeVersion::V17_0_0)]
+    #[test_case(UnicodeVersion::V18_0_0)]
     fn test_successive_union(version: UnicodeVersion) {
         let mut x = vec![];
         for v in version.table() {
@@ -751,6 +758,7 @@ mod tests {
     #[test_case(UnicodeVersion::V15_1_0, "15.1.0")]
     #[test_case(UnicodeVersion::V16_0_0, "16.0.0")]
     #[test_case(UnicodeVersion::V17_0_0, "17.0.0")]
+    #[test_case(UnicodeVersion::V18_0_0, "18.0.0")]
     fn test_display(version: UnicodeVersion, expected: &str) {
         let string = version.to_string();
         assert_eq!(string, expected);
@@ -771,6 +779,7 @@ mod tests {
     #[test_case("15.1.0", UnicodeVersion::V15_1_0)]
     #[test_case("16.0.0", UnicodeVersion::V16_0_0)]
     #[test_case("17.0.0", UnicodeVersion::V17_0_0)]
+    #[test_case("18.0.0", UnicodeVersion::V18_0_0)]
     fn test_version_from_str(version: &str, expected: UnicodeVersion) {
         assert_eq!(
             UnicodeVersion::from_str(version).expect("Invalid version"),

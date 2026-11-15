@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Support for Unicode 18.0.0.
+
+### Changed
+
+- **BREAKING**: `UnicodeVersion::latest()` now returns `UnicodeVersion::V18_0_0`.
+
 ## [0.4.0] - 2026-11-15
 
 ### Performance

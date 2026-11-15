@@ -39,7 +39,7 @@ impl IntervalSet {
     ///     .include_categories(UnicodeCategory::UPPERCASE_LETTER)
     ///     .interval_set()
     ///     .expect("Invalid query input");
-    /// assert_eq!(interval_set.len(), 1886);
+    /// assert_eq!(interval_set.len(), 1906);
     /// ```
     #[inline]
     #[must_use]
