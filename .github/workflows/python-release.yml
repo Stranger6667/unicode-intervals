@@ -20,7 +20,7 @@ env:
   # Single abi3 wheel per platform covers CPython 3.10+
   PYTHON_ABI_VERSION: "3.10"
   PYPY_VERSION: "pypy3.11"
-  PYODIDE_RUST_TOOLCHAIN: "nightly-2025-02-01"
+  PYODIDE_RUST_TOOLCHAIN: "nightly-2025-06-27"
 
 jobs:
   sdist:
