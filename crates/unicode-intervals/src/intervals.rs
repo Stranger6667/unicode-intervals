@@ -57,6 +57,51 @@ pub fn union(left: &[Interval], right: &[Interval]) -> Vec<Interval> {
     result
 }
 
+/// `subtract` copies `left` in bulk when it is at least this many times longer than `right`.
+const SPARSE_RATIO: usize = 8;
+
+/// Number of leading intervals ending before `bound`.
+/// Doubling steps, then a binary search: cheap for short runs, logarithmic for long ones.
+#[allow(clippy::arithmetic_side_effects)]
+fn run_before(intervals: &[Interval], bound: u32) -> usize {
+    let mut step = 1;
+    while step <= intervals.len() && intervals[step - 1].1 < bound {
+        step *= 2;
+    }
+    // The first `step / 2` intervals end before `bound`, the one at `step - 1` does not
+    // (or is past the end).
+    let low = step / 2;
+    let high = (step - 1).min(intervals.len());
+    low + intervals[low..high].partition_point(|&(_, end)| end < bound)
+}
+
+/// `subtract` for a `right` much shorter than `left`: bulk-copy the runs of `left` between
+/// the intervals of `right`.
+#[allow(clippy::arithmetic_side_effects)]
+fn subtract_sparse(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
+    let mut result = Vec::with_capacity(left.len() + right.len());
+    let mut i = 0;
+    for &(rl, rr) in right {
+        let run = run_before(&left[i..], rl);
+        result.extend_from_slice(&left[i..i + run]);
+        i += run;
+        // Intervals overlapping `(rl, rr)`: keep what sticks out on either side.
+        while i < left.len() && left[i].0 <= rr {
+            let (ll, lr) = left[i];
+            if ll < rl {
+                result.push((ll, rl - 1));
+            }
+            if lr > rr {
+                left[i].0 = rr + 1;
+                break;
+            }
+            i += 1;
+        }
+    }
+    result.extend_from_slice(&left[i..]);
+    result
+}
+
 /// Subtract `right` set of intervals from `left`.
 #[inline]
 // Practically all interval values are < u32::MAX
@@ -66,6 +111,8 @@ pub fn union(left: &[Interval], right: &[Interval]) -> Vec<Interval> {
 pub fn subtract(mut left: Vec<Interval>, right: &[Interval]) -> Vec<Interval> {
     if right.is_empty() || left.is_empty() {
         left
+    } else if right.len().saturating_mul(SPARSE_RATIO) < left.len() {
+        subtract_sparse(left, right)
     } else {
         let (mut i, mut j) = (0, 0);
         let mut result = Vec::with_capacity(left.len());
@@ -231,6 +278,38 @@ mod tests {
             }
         }
         out
+    }
+
+    // Sparse and dense `right` against long `left`, so runs of every length are skipped.
+    #[test]
+    fn test_subtract_random_against_oracle() {
+        fn next(state: &mut u64, bound: u32) -> u32 {
+            *state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (*state >> 33) as u32 % bound
+        }
+        fn random(state: &mut u64, max_count: u32) -> Vec<Interval> {
+            let mut intervals: Vec<Interval> = (0..next(state, max_count))
+                .map(|_| {
+                    let left = next(state, 600);
+                    (left, left + next(state, 4))
+                })
+                .collect();
+            merge(&mut intervals);
+            intervals
+        }
+        let mut state = 0x1234_5678_9abc_def0u64;
+        for round in 0..5_000 {
+            let left = random(&mut state, 120);
+            let right = random(&mut state, if round % 2 == 0 { 6 } else { 120 });
+            let expected = subtract_oracle(&left, &right);
+            assert_eq!(
+                subtract(left.clone(), &right),
+                expected,
+                "{left:?} - {right:?}"
+            );
+        }
     }
 
     // Multi-interval `left` so bulk runs between/around `right` are exercised.
