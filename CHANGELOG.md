@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-15
+
 ### Added
 
 - Support for Unicode 18.0.0.
@@ -80,7 +82,8 @@
 
 - Initial public release.
 
-[Unreleased]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.4.0...HEAD
+[Unreleased]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.5.0...HEAD
+[0.5.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.4.0...rust-v0.5.0
 [0.4.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.3.1...rust-v0.4.0
 [0.3.1]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.3.0...rust-v0.3.1
 [0.3.0]: https://github.com/Stranger6667/unicode-intervals/compare/rust-v0.2.0...rust-v0.3.0
