@@ -10,6 +10,10 @@
 
 - **BREAKING**: `UnicodeVersion::latest()` now returns `UnicodeVersion::V18_0_0`.
 
+### Performance
+
+- `query` with several categories uses NEON on AArch64, making such queries ~2.2-2.6x faster on Apple silicon.
+
 ## [0.4.0] - 2026-11-15
 
 ### Performance

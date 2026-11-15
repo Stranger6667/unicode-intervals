@@ -252,11 +252,8 @@ fn union_runs(
     max_codepoint: u32,
     simd: bool,
 ) -> Vec<Interval> {
-    #[cfg(target_arch = "x86_64")]
-    let simd = simd
-        && std::arch::is_x86_feature_detected!("avx2")
-        && std::arch::is_x86_feature_detected!("popcnt");
-    #[cfg(not(target_arch = "x86_64"))]
+    let simd = simd && simd_supported();
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     let _ = simd;
     // The first run starts at 0, so there is always one starting at or below `min_codepoint`.
     let start = runs.partition_point(|&run| run >> CATEGORY_BITS <= min_codepoint) - 1;
@@ -267,22 +264,22 @@ fn union_runs(
     let mut previous = 0;
     for chunk in runs.chunks(64) {
         let members = match <&[u32; 64]>::try_from(chunk) {
-            #[cfg(target_arch = "x86_64")]
-            // SAFETY: AVX2 support is checked above.
-            Ok(chunk) if simd => unsafe { members_avx2(chunk, mask) },
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            // SAFETY: SIMD support is checked above.
+            Ok(chunk) if simd => unsafe { members_simd(chunk, mask) },
             _ => chunk.iter().rev().fold(0u64, |members, &run| {
                 members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
             }),
         };
         let mut edges = (members ^ (members << 1 | previous)) & (u64::MAX >> (64 - chunk.len()));
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         // Most chunks of a sparse union have no edges at all: skip the bit count for them.
         if simd && edges != 0 && edges.count_ones() >= COMPACT_EDGES {
             if let Ok(chunk) = <&[u32; 64]>::try_from(chunk) {
                 let mut boundaries = [0; 64];
-                // SAFETY: AVX2 and POPCNT support is checked above.
+                // SAFETY: SIMD support is checked above.
                 let count =
-                    unsafe { boundaries_avx2(chunk, edges, min_codepoint, &mut boundaries) };
+                    unsafe { boundaries_simd(chunk, edges, min_codepoint, &mut boundaries) };
                 // Edges alternate between interval starts and ends.
                 let mut boundaries = &boundaries[..count];
                 if previous == 1 {
@@ -316,6 +313,121 @@ fn union_runs(
     intervals
 }
 
+/// Whether the SIMD paths of `union_runs` can run on this CPU.
+#[cfg(target_arch = "x86_64")]
+fn simd_supported() -> bool {
+    std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("popcnt")
+}
+
+/// NEON is part of the `AArch64` baseline.
+#[cfg(target_arch = "aarch64")]
+const fn simd_supported() -> bool {
+    true
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+const fn simd_supported() -> bool {
+    false
+}
+
+#[cfg(target_arch = "x86_64")]
+use self::{boundaries_avx2 as boundaries_simd, members_avx2 as members_simd};
+#[cfg(target_arch = "aarch64")]
+use self::{boundaries_neon as boundaries_simd, members_neon as members_simd};
+
+/// Membership bits of 64 runs, 4 per step: shift each run's category bit of `mask` to the
+/// position of its lane and add the lanes up.
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+unsafe fn members_neon(chunk: &[u32; 64], mask: u32) -> u64 {
+    use std::arch::aarch64::{
+        vaddvq_u32, vandq_u32, vdupq_n_u32, vld1q_u32, vreinterpretq_s32_u32, vshlq_u32, vsubq_s32,
+    };
+    const LANES: [u32; 4] = [0, 1, 2, 3];
+    const LANE_BITS: [u32; 4] = [1, 2, 4, 8];
+    let mask = vdupq_n_u32(mask);
+    let category_mask = vdupq_n_u32(CATEGORY_MASK);
+    // SAFETY: both arrays hold 4 `u32`, exactly one 128-bit load each.
+    let (lanes, lane_bits) = unsafe { (vld1q_u32(LANES.as_ptr()), vld1q_u32(LANE_BITS.as_ptr())) };
+    let mut members = 0u64;
+    for (idx, quad) in chunk.chunks_exact(4).enumerate() {
+        // SAFETY: `quad` holds 4 `u32`, exactly one 128-bit load.
+        let runs = unsafe { vld1q_u32(quad.as_ptr()) };
+        let categories = vandq_u32(runs, category_mask);
+        // A negative count shifts right: bit `category` of `mask` lands on bit `lane`.
+        let shifts = vsubq_s32(
+            vreinterpretq_s32_u32(lanes),
+            vreinterpretq_s32_u32(categories),
+        );
+        let bits = vandq_u32(vshlq_u32(mask, shifts), lane_bits);
+        members |= u64::from(vaddvq_u32(bits)) << (idx * 4);
+    }
+    members
+}
+
+/// For every 4-bit mask, the byte indices of its set 32-bit lanes in ascending order.
+#[cfg(target_arch = "aarch64")]
+#[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
+const LEFT_PACK_BYTES: [[u8; 16]; 16] = {
+    let mut table = [[0u8; 16]; 16];
+    let mut mask = 0;
+    while mask < 16 {
+        let mut count = 0;
+        let mut lane = 0;
+        while lane < 4 {
+            if mask >> lane & 1 == 1 {
+                let mut byte = 0;
+                while byte < 4 {
+                    table[mask][count * 4 + byte] = (lane * 4 + byte) as u8;
+                    byte += 1;
+                }
+                count += 1;
+            }
+            lane += 1;
+        }
+        mask += 1;
+    }
+    table
+};
+
+/// Start codepoints of the runs selected by `edges`, clamped to `min_codepoint` and packed
+/// to the front of `boundaries`, 4 runs per step. Returns how many were written.
+#[cfg(target_arch = "aarch64")]
+#[target_feature(enable = "neon")]
+#[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
+unsafe fn boundaries_neon(
+    chunk: &[u32; 64],
+    edges: u64,
+    min_codepoint: u32,
+    boundaries: &mut [u32; 64],
+) -> usize {
+    use std::arch::aarch64::{
+        vdupq_n_u32, vld1q_u32, vld1q_u8, vmaxq_u32, vqtbl1q_u8, vreinterpretq_u32_u8,
+        vreinterpretq_u8_u32, vshrq_n_u32, vst1q_u32,
+    };
+    let min_codepoint = vdupq_n_u32(min_codepoint);
+    let mut count = 0;
+    for (idx, quad) in chunk.chunks_exact(4).enumerate() {
+        let selected = (edges >> (idx * 4)) as usize & 0xF;
+        // SAFETY: `quad` holds 4 `u32`, exactly one 128-bit load.
+        let runs = unsafe { vld1q_u32(quad.as_ptr()) };
+        let starts = vmaxq_u32(vshrq_n_u32::<5>(runs), min_codepoint);
+        // SAFETY: every `LEFT_PACK_BYTES` entry is 16 bytes, the size of this load.
+        let order = unsafe { vld1q_u8(LEFT_PACK_BYTES[selected].as_ptr()) };
+        let packed = vreinterpretq_u32_u8(vqtbl1q_u8(vreinterpretq_u8_u32(starts), order));
+        // SAFETY: at most `idx * 4` values are written so far, so these 4 end within the
+        // 64 of `boundaries`.
+        unsafe { vst1q_u32(boundaries.as_mut_ptr().add(count), packed) };
+        count += selected.count_ones() as usize;
+    }
+    count
+}
+
 /// Membership bits of 64 runs, 8 per instruction: shift each run's category bit of `mask`
 /// into the sign position and collect the signs.
 #[cfg(target_arch = "x86_64")]
@@ -345,7 +457,7 @@ unsafe fn members_avx2(chunk: &[u32; 64], mask: u32) -> u64 {
 }
 
 /// Chunks with at least this many edges are compacted with SIMD instead of bit by bit.
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 const COMPACT_EDGES: u32 = 16;
 
 /// For every 8-bit mask, the indices of its set bits in ascending order.
@@ -808,11 +920,10 @@ mod tests {
         let _ = build_runs::<1>(&[&[(0, 5)]]);
     }
 
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[test]
-    fn test_boundaries_avx2() {
-        let supported = std::arch::is_x86_feature_detected!("avx2")
-            && std::arch::is_x86_feature_detected!("popcnt");
+    fn test_boundaries_simd() {
+        let supported = simd_supported();
         let mut state = 0x1234_5678_9abc_def0u64;
         let mut next = || {
             state = state
@@ -838,9 +949,40 @@ mod tests {
                 .map(|idx| (chunk[idx] >> CATEGORY_BITS).max(min_codepoint))
                 .collect();
             let mut boundaries = [0; 64];
-            // SAFETY: AVX2 and POPCNT support is checked above.
-            let count = unsafe { boundaries_avx2(chunk, edges, min_codepoint, &mut boundaries) };
+            // SAFETY: SIMD support is checked above.
+            let count = unsafe { boundaries_simd(chunk, edges, min_codepoint, &mut boundaries) };
             assert_eq!(&boundaries[..count], expected, "edges={edges:#x}");
+        }
+    }
+
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    #[test]
+    fn test_members_simd() {
+        let supported = simd_supported();
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as u32
+        };
+        let runs = RUNS[UnicodeVersion::V15_0_0 as usize];
+        // No rounds without the CPU features.
+        for round in 0..u32::from(supported) * 2_000 {
+            let offset = next() as usize % (runs.len() - 64);
+            let chunk: &[u32; 64] = runs[offset..offset + 64].try_into().expect("64 runs");
+            let mask = match round % 4 {
+                0 => ALL_CATEGORIES,
+                1 => 0,
+                2 => 1 << (next() % 30),
+                _ => next() & ALL_CATEGORIES,
+            };
+            let expected = chunk.iter().rev().fold(0u64, |members, &run| {
+                members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
+            });
+            // SAFETY: SIMD support is checked above.
+            let members = unsafe { members_simd(chunk, mask) };
+            assert_eq!(members, expected, "mask={mask:#x} offset={offset}");
         }
     }
 
