@@ -35,3 +35,24 @@ jobs:
         with:
           mode: simulation
           run: cargo codspeed run
+
+  python-benchmarks:
+    name: Run Python benchmarks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: astral-sh/setup-uv@v8.2.0
+
+      - name: Build the extension and install benchmark dependencies
+        run: |
+          uv venv --python 3.13
+          uv pip install "./crates/unicode-intervals-py[bench]"
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v4
+        with:
+          mode: simulation
+          run: .venv/bin/pytest crates/unicode-intervals-py/benches-py/test_bench_api.py --codspeed
