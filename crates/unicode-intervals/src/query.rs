@@ -253,7 +253,9 @@ fn union_runs(
     simd: bool,
 ) -> Vec<Interval> {
     #[cfg(target_arch = "x86_64")]
-    let simd = simd && std::arch::is_x86_feature_detected!("avx2");
+    let simd = simd
+        && std::arch::is_x86_feature_detected!("avx2")
+        && std::arch::is_x86_feature_detected!("popcnt");
     #[cfg(not(target_arch = "x86_64"))]
     let _ = simd;
     // The first run starts at 0, so there is always one starting at or below `min_codepoint`.
@@ -273,6 +275,28 @@ fn union_runs(
             }),
         };
         let mut edges = (members ^ (members << 1 | previous)) & (u64::MAX >> (64 - chunk.len()));
+        #[cfg(target_arch = "x86_64")]
+        // Most chunks of a sparse union have no edges at all: skip the bit count for them.
+        if simd && edges != 0 && edges.count_ones() >= COMPACT_EDGES {
+            if let Ok(chunk) = <&[u32; 64]>::try_from(chunk) {
+                let mut boundaries = [0; 64];
+                // SAFETY: AVX2 and POPCNT support is checked above.
+                let count =
+                    unsafe { boundaries_avx2(chunk, edges, min_codepoint, &mut boundaries) };
+                // Edges alternate between interval starts and ends.
+                let mut boundaries = &boundaries[..count];
+                if previous == 1 {
+                    intervals.push((left, boundaries[0] - 1));
+                    boundaries = &boundaries[1..];
+                }
+                let pairs = boundaries.chunks_exact(2);
+                if let [start] = pairs.remainder() {
+                    left = *start;
+                }
+                intervals.extend(pairs.map(|pair| (pair[0], pair[1] - 1)));
+                edges = 0;
+            }
+        }
         previous = members >> (chunk.len() - 1);
         while edges != 0 {
             let idx = edges.trailing_zeros();
@@ -318,6 +342,68 @@ unsafe fn members_avx2(chunk: &[u32; 64], mask: u32) -> u64 {
         members |= u64::from(bits) << (idx * 8);
     }
     members
+}
+
+/// Chunks with at least this many edges are compacted with SIMD instead of bit by bit.
+#[cfg(target_arch = "x86_64")]
+const COMPACT_EDGES: u32 = 16;
+
+/// For every 8-bit mask, the indices of its set bits in ascending order.
+#[cfg(target_arch = "x86_64")]
+#[allow(clippy::arithmetic_side_effects, clippy::cast_possible_truncation)]
+const LEFT_PACK: [[u8; 8]; 256] = {
+    let mut table = [[0u8; 8]; 256];
+    let mut mask = 0;
+    while mask < 256 {
+        let mut count = 0;
+        let mut bit = 0;
+        while bit < 8 {
+            if mask >> bit & 1 == 1 {
+                table[mask][count] = bit as u8;
+                count += 1;
+            }
+            bit += 1;
+        }
+        mask += 1;
+    }
+    table
+};
+
+/// Start codepoints of the runs selected by `edges`, clamped to `min_codepoint` and packed
+/// to the front of `boundaries`, 8 runs per step. Returns how many were written.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,popcnt")]
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+unsafe fn boundaries_avx2(
+    chunk: &[u32; 64],
+    edges: u64,
+    min_codepoint: u32,
+    boundaries: &mut [u32; 64],
+) -> usize {
+    use std::arch::x86_64::{
+        _mm256_cvtepu8_epi32, _mm256_loadu_si256, _mm256_max_epu32, _mm256_permutevar8x32_epi32,
+        _mm256_set1_epi32, _mm256_srli_epi32, _mm256_storeu_si256, _mm_loadl_epi64,
+    };
+    let min_codepoint = _mm256_set1_epi32(min_codepoint as i32);
+    let mut count = 0;
+    for (idx, lanes) in chunk.chunks_exact(8).enumerate() {
+        let selected = (edges >> (idx * 8)) as u8;
+        // SAFETY: `lanes` holds 8 `u32`, exactly one unaligned 256-bit load.
+        let runs = unsafe { _mm256_loadu_si256(lanes.as_ptr().cast()) };
+        let starts = _mm256_max_epu32(_mm256_srli_epi32::<5>(runs), min_codepoint);
+        // SAFETY: every `LEFT_PACK` entry is 8 bytes, the size of this load.
+        let order = unsafe { _mm_loadl_epi64(LEFT_PACK[selected as usize].as_ptr().cast()) };
+        let packed = _mm256_permutevar8x32_epi32(starts, _mm256_cvtepu8_epi32(order));
+        // SAFETY: at most `idx * 8` values are written so far, so these 8 end within the
+        // 64 of `boundaries`.
+        unsafe { _mm256_storeu_si256(boundaries.as_mut_ptr().add(count).cast(), packed) };
+        count += selected.count_ones() as usize;
+    }
+    count
 }
 
 /// Codepoints below this bound fit in a 256-bit mask (`[u64; 4]`).
@@ -719,6 +805,42 @@ mod tests {
     #[should_panic(expected = "categories must partition the codepoint space")]
     fn test_build_runs_short() {
         let _ = build_runs::<1>(&[&[(0, 5)]]);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_boundaries_avx2() {
+        let supported = std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("popcnt");
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as u32
+        };
+        let runs = RUNS[UnicodeVersion::V15_0_0 as usize];
+        // No rounds without the CPU features.
+        for round in 0..u32::from(supported) * 2_000 {
+            let offset = next() as usize % (runs.len() - 64);
+            let chunk: &[u32; 64] = runs[offset..offset + 64].try_into().expect("64 runs");
+            let random = u64::from(next()) | u64::from(next()) << 31 | u64::from(next()) << 62;
+            let edges = match round % 4 {
+                0 => u64::MAX,
+                1 => 0,
+                2 => random & random.rotate_left(17),
+                _ => random,
+            };
+            let min_codepoint = (round % 2) * (chunk[5] >> CATEGORY_BITS);
+            let expected: Vec<u32> = (0..64)
+                .filter(|idx| edges >> idx & 1 == 1)
+                .map(|idx| (chunk[idx] >> CATEGORY_BITS).max(min_codepoint))
+                .collect();
+            let mut boundaries = [0; 64];
+            // SAFETY: AVX2 and POPCNT support is checked above.
+            let count = unsafe { boundaries_avx2(chunk, edges, min_codepoint, &mut boundaries) };
+            assert_eq!(&boundaries[..count], expected, "edges={edges:#x}");
+        }
     }
 
     // Independent reference for `union_runs`: clamp every category on its own, then sort + merge.
