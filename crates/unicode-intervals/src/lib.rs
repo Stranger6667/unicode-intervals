@@ -128,11 +128,6 @@ pub use crate::{
 #[cfg(feature = "__benchmark_internals")]
 /// Internals used for benchmarking.
 pub mod internals {
-    /// Unicode categories.
-    pub mod categories {
-        pub use crate::categories::merge;
-    }
-
     /// Intervals manipulation.
     pub mod intervals {
         pub use crate::intervals::{from_str, merge, subtract};

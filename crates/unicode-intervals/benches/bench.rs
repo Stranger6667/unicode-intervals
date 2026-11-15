@@ -1,13 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
 use unicode_intervals::{internals, UnicodeCategory, UnicodeCategorySet, UnicodeVersion};
 
-fn version(c: &mut Criterion) {
-    let version = black_box(UnicodeVersion::V15_0_0);
-    c.bench_function("version - normalized_categories", |b| {
-        b.iter(|| version.normalized_categories())
-    });
-}
-
 fn intervals(c: &mut Criterion) {
     let string = black_box("abcdef0123456789");
     let long_string =
@@ -64,33 +57,10 @@ fn categories(c: &mut Criterion) {
     c.bench_function("categories - set - display - few", |b| {
         b.iter(|| few_categories.to_string())
     });
-    c.bench_function("categories - merge", |b| {
-        b.iter(|| {
-            internals::categories::merge(
-                Some(all_categories),
-                black_box(UnicodeCategory::Lu.into()),
-            )
-        })
-    });
 }
 
 fn query(c: &mut Criterion) {
     let version = black_box(UnicodeVersion::V15_0_0);
-    c.bench_function("query - intervals_for_set - empty", |b| {
-        b.iter(|| {
-            internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::new()))
-        })
-    });
-    c.bench_function("query - intervals_for_set - all", |b| {
-        b.iter(|| {
-            internals::query::intervals_for_set(version, black_box(UnicodeCategorySet::all()))
-        })
-    });
-    c.bench_function("query - intervals_for_set - single large", |b| {
-        b.iter(|| {
-            internals::query::intervals_for_set(version, black_box(UnicodeCategory::Lu).into())
-        })
-    });
     c.bench_function("query - intervals_for_set - multiple", |b| {
         b.iter(|| {
             internals::query::intervals_for_set(
@@ -238,5 +208,5 @@ fn query(c: &mut Criterion) {
     });
 }
 
-criterion_group!(default, version, intervals, categories, query);
+criterion_group!(default, intervals, categories, query);
 criterion_main!(default);
