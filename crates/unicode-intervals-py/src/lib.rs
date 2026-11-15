@@ -14,12 +14,13 @@ static CATEGORIES_CACHE: [OnceLock<Py<PyTuple>>; CoreVersion::ALL.len()] =
 /// A bundled Unicode version, e.g. ``UnicodeVersion("16.0.0")``.
 #[pyclass(
     eq,
+    hash,
     frozen,
     from_py_object,
     name = "UnicodeVersion",
     module = "unicode_intervals"
 )]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum PyUnicodeVersion {
     V9_0_0,
     V10_0_0,

@@ -6,6 +6,7 @@
 
 - Support for Unicode 18.0.0.
 - Support for Python 3.15, including free-threaded wheels.
+- Hashing for `UnicodeVersion`, so it works as a dict key and set member.
 
 ### Changed
 
