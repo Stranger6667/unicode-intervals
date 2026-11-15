@@ -44,6 +44,32 @@ def test_query_version_and_excludes():
     assert res == ((67, 90),)
 
 
+@pytest.mark.parametrize(
+    "categories",
+    [["Lu"], ("Lu",), {"Lu"}, frozenset(["Lu"]), {"Lu": None}.keys(), (c for c in ["Lu"])],
+    ids=["list", "tuple", "set", "frozenset", "dict-keys", "generator"],
+)
+def test_query_category_iterables(categories):
+    assert unicode_intervals.query(max_codepoint=128, categories=categories) == ((65, 90),)
+
+
+def test_query_exclude_category_iterables():
+    assert unicode_intervals.query(max_codepoint=64, exclude_categories={"Cc", "Zs"}) == ((33, 64),)
+
+
+@pytest.mark.parametrize("categories", ["Lu", [1], 1], ids=["str", "non-str-element", "non-iterable"])
+def test_query_category_type_errors(categories):
+    with pytest.raises(TypeError):
+        unicode_intervals.query(categories=categories)
+    with pytest.raises(TypeError):
+        unicode_intervals.query(exclude_categories=categories)
+
+
+def test_query_unknown_category_message():
+    with pytest.raises(ValueError, match="^Unknown category: Xx$"):
+        unicode_intervals.query(categories=["Lu", "Xx"])
+
+
 def test_query_invalid():
     with pytest.raises(ValueError):
         unicode_intervals.query(categories=["Xx"])

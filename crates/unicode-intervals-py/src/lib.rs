@@ -1,4 +1,9 @@
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple, wrap_pyfunction};
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+    types::{PyString, PyTuple},
+    wrap_pyfunction,
+};
 use std::sync::OnceLock;
 use unicode_intervals_core::{UnicodeCategory, UnicodeCategorySet, UnicodeVersion as CoreVersion};
 
@@ -90,20 +95,26 @@ impl PyUnicodeVersion {
     }
 }
 
-fn parse_categories(names: Option<Vec<String>>) -> PyResult<Option<UnicodeCategorySet>> {
-    match names {
-        None => Ok(None),
-        Some(list) => {
-            let mut set = UnicodeCategorySet::new();
-            for name in list {
-                let category: UnicodeCategory = name
-                    .parse()
-                    .map_err(|_| PyValueError::new_err(format!("Unknown category: {name}")))?;
-                set |= category;
-            }
-            Ok(Some(set))
-        }
+fn parse_categories(names: Option<&Bound<'_, PyAny>>) -> PyResult<Option<UnicodeCategorySet>> {
+    let Some(names) = names else {
+        return Ok(None);
+    };
+    // Iterating a `str` would silently treat every character as a category.
+    if names.is_instance_of::<PyString>() {
+        return Err(PyTypeError::new_err(
+            "Categories must be an iterable of `str`, not `str`",
+        ));
     }
+    let mut set = UnicodeCategorySet::new();
+    for name in names.try_iter()? {
+        let name = name?;
+        let name = name.cast::<PyString>()?.to_str()?;
+        let category: UnicodeCategory = name
+            .parse()
+            .map_err(|_| PyValueError::new_err(format!("Unknown category: {name}")))?;
+        set |= category;
+    }
+    Ok(Some(set))
 }
 
 /// Return a tuple of inclusive ``(start, end)`` code point intervals matching the criteria.
@@ -118,8 +129,8 @@ fn parse_categories(names: Option<Vec<String>>) -> PyResult<Option<UnicodeCatego
 #[allow(clippy::too_many_arguments)]
 fn query(
     py: Python<'_>,
-    categories: Option<Vec<String>>,
-    exclude_categories: Option<Vec<String>>,
+    categories: Option<&Bound<'_, PyAny>>,
+    exclude_categories: Option<&Bound<'_, PyAny>>,
     min_codepoint: Option<u32>,
     max_codepoint: Option<u32>,
     include_characters: &str,
