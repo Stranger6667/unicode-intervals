@@ -1,6 +1,14 @@
+import subprocess
+import sys
+
 import pytest
 
 import unicode_intervals
+
+
+def test_import_without_warnings():
+    # Type creation warnings surface at import time and break `-W error` setups.
+    subprocess.run([sys.executable, "-W", "error", "-c", "import unicode_intervals"], check=True)
 
 
 def test_versions():
