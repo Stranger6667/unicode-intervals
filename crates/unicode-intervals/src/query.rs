@@ -1,3 +1,5 @@
+#[cfg(target_arch = "x86_64")]
+use crate::avx512;
 use crate::{
     categories,
     categories::UnicodeCategorySet,
@@ -44,7 +46,7 @@ pub fn query(
             categories.into_value(),
             min_codepoint,
             max_codepoint,
-            true,
+            Simd::best(),
         ))
     } else if min_codepoint == 0 && max_codepoint == MAX_CODEPOINT {
         intervals_for_set(version, categories)
@@ -175,8 +177,8 @@ fn extend_clamped(
 }
 
 /// A run packs a category interval as `left << CATEGORY_BITS | category`.
-const CATEGORY_BITS: u32 = 5;
-const CATEGORY_MASK: u32 = (1 << CATEGORY_BITS) - 1;
+pub(crate) const CATEGORY_BITS: u32 = 5;
+pub(crate) const CATEGORY_MASK: u32 = (1 << CATEGORY_BITS) - 1;
 
 const fn count_runs(table: &[&[Interval]]) -> usize {
     let mut count = 0;
@@ -250,11 +252,9 @@ fn union_runs(
     mask: u32,
     min_codepoint: u32,
     max_codepoint: u32,
-    simd: bool,
+    simd: Simd,
 ) -> Vec<Interval> {
-    let simd = simd && simd_supported();
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    let _ = simd;
+    assert!(simd.is_supported());
     // The first run starts at 0, so there is always one starting at or below `min_codepoint`.
     let start = runs.partition_point(|&run| run >> CATEGORY_BITS <= min_codepoint) - 1;
     let end = runs.partition_point(|&run| run >> CATEGORY_BITS <= max_codepoint);
@@ -264,22 +264,18 @@ fn union_runs(
     let mut previous = 0;
     for chunk in runs.chunks(64) {
         let members = match <&[u32; 64]>::try_from(chunk) {
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             // SAFETY: SIMD support is checked above.
-            Ok(chunk) if simd => unsafe { members_simd(chunk, mask) },
-            _ => chunk.iter().rev().fold(0u64, |members, &run| {
-                members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
-            }),
+            Ok(chunk) => unsafe { simd.members(chunk, mask) },
+            Err(_) => members_scalar(chunk, mask),
         };
         let mut edges = (members ^ (members << 1 | previous)) & (u64::MAX >> (64 - chunk.len()));
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         // Most chunks of a sparse union have no edges at all: skip the bit count for them.
-        if simd && edges != 0 && edges.count_ones() >= COMPACT_EDGES {
+        if simd != Simd::Scalar && edges != 0 && edges.count_ones() >= COMPACT_EDGES {
             if let Ok(chunk) = <&[u32; 64]>::try_from(chunk) {
                 let mut boundaries = [0; 64];
                 // SAFETY: SIMD support is checked above.
                 let count =
-                    unsafe { boundaries_simd(chunk, edges, min_codepoint, &mut boundaries) };
+                    unsafe { simd.boundaries(chunk, edges, min_codepoint, &mut boundaries) };
                 // Edges alternate between interval starts and ends.
                 let mut boundaries = &boundaries[..count];
                 if previous == 1 {
@@ -313,27 +309,128 @@ fn union_runs(
     intervals
 }
 
-/// Whether the SIMD paths of `union_runs` can run on this CPU.
-#[cfg(target_arch = "x86_64")]
-fn simd_supported() -> bool {
-    std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("popcnt")
+/// Implementation of the per-chunk steps of `union_runs`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Simd {
+    Scalar,
+    #[cfg(target_arch = "x86_64")]
+    Avx2,
+    #[cfg(target_arch = "x86_64")]
+    Avx512,
+    #[cfg(target_arch = "aarch64")]
+    Neon,
 }
 
-/// NEON is part of the `AArch64` baseline.
-#[cfg(target_arch = "aarch64")]
-const fn simd_supported() -> bool {
-    true
+impl Simd {
+    /// Slowest first.
+    const ALL: &'static [Simd] = &[
+        Simd::Scalar,
+        #[cfg(target_arch = "x86_64")]
+        Simd::Avx2,
+        #[cfg(target_arch = "x86_64")]
+        Simd::Avx512,
+        #[cfg(target_arch = "aarch64")]
+        Simd::Neon,
+    ];
+
+    fn is_supported(self) -> bool {
+        match self {
+            Simd::Scalar => true,
+            #[cfg(target_arch = "x86_64")]
+            Simd::Avx2 => {
+                std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("popcnt")
+            }
+            #[cfg(target_arch = "x86_64")]
+            Simd::Avx512 => {
+                std::arch::is_x86_feature_detected!("avx512f")
+                    && std::arch::is_x86_feature_detected!("popcnt")
+            }
+            // NEON is part of the `AArch64` baseline.
+            #[cfg(target_arch = "aarch64")]
+            Simd::Neon => true,
+        }
+    }
+
+    /// The fastest implementation this CPU supports.
+    fn best() -> Simd {
+        let supported = Simd::ALL.iter().rev().find(|simd| simd.is_supported());
+        supported.copied().unwrap_or(Simd::Scalar)
+    }
+
+    /// Membership bits of 64 runs.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be supported by the CPU.
+    #[inline]
+    unsafe fn members(self, chunk: &[u32; 64], mask: u32) -> u64 {
+        match self {
+            Simd::Scalar => members_scalar(chunk, mask),
+            #[cfg(target_arch = "x86_64")]
+            // SAFETY: the caller guarantees AVX2 support.
+            Simd::Avx2 => unsafe { members_avx2(chunk, mask) },
+            #[cfg(target_arch = "x86_64")]
+            // SAFETY: the caller guarantees AVX-512 support.
+            Simd::Avx512 => unsafe { avx512::members(chunk, mask) },
+            #[cfg(target_arch = "aarch64")]
+            // SAFETY: NEON is always available.
+            Simd::Neon => unsafe { members_neon(chunk, mask) },
+        }
+    }
+
+    /// Start codepoints of the runs selected by `edges`, clamped to `min_codepoint` and
+    /// packed to the front of `boundaries`. Returns how many were written.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be supported by the CPU.
+    #[inline]
+    unsafe fn boundaries(
+        self,
+        chunk: &[u32; 64],
+        edges: u64,
+        min_codepoint: u32,
+        boundaries: &mut [u32; 64],
+    ) -> usize {
+        match self {
+            Simd::Scalar => boundaries_scalar(chunk, edges, min_codepoint, boundaries),
+            #[cfg(target_arch = "x86_64")]
+            // SAFETY: the caller guarantees AVX2 support.
+            Simd::Avx2 => unsafe { boundaries_avx2(chunk, edges, min_codepoint, boundaries) },
+            #[cfg(target_arch = "x86_64")]
+            // SAFETY: the caller guarantees AVX-512 support.
+            Simd::Avx512 => unsafe { avx512::boundaries(chunk, edges, min_codepoint, boundaries) },
+            #[cfg(target_arch = "aarch64")]
+            // SAFETY: NEON is always available.
+            Simd::Neon => unsafe { boundaries_neon(chunk, edges, min_codepoint, boundaries) },
+        }
+    }
 }
 
-#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-const fn simd_supported() -> bool {
-    false
+fn members_scalar(chunk: &[u32], mask: u32) -> u64 {
+    chunk.iter().rev().fold(0u64, |members, &run| {
+        members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
+    })
 }
 
-#[cfg(target_arch = "x86_64")]
-use self::{boundaries_avx2 as boundaries_simd, members_avx2 as members_simd};
-#[cfg(target_arch = "aarch64")]
-use self::{boundaries_neon as boundaries_simd, members_neon as members_simd};
+#[allow(clippy::arithmetic_side_effects)]
+fn boundaries_scalar(
+    chunk: &[u32; 64],
+    mut edges: u64,
+    min_codepoint: u32,
+    boundaries: &mut [u32; 64],
+) -> usize {
+    let mut count = 0;
+    while edges != 0 {
+        let run = chunk[edges.trailing_zeros() as usize];
+        boundaries[count] = max(run >> CATEGORY_BITS, min_codepoint);
+        count += 1;
+        // Clear the lowest set bit.
+        edges &= edges - 1;
+    }
+    count
+}
 
 /// Membership bits of 64 runs, 4 per step: shift each run's category bit of `mask` to the
 /// position of its lane and add the lanes up.
@@ -457,7 +554,6 @@ unsafe fn members_avx2(chunk: &[u32; 64], mask: u32) -> u64 {
 }
 
 /// Chunks with at least this many edges are compacted with SIMD instead of bit by bit.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 const COMPACT_EDGES: u32 = 16;
 
 /// For every 8-bit mask, the indices of its set bits in ascending order.
@@ -920,10 +1016,18 @@ mod tests {
         let _ = build_runs::<1>(&[&[(0, 5)]]);
     }
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    fn supported() -> impl Iterator<Item = Simd> {
+        Simd::ALL.iter().copied().filter(|simd| simd.is_supported())
+    }
+
     #[test]
-    fn test_boundaries_simd() {
-        let supported = simd_supported();
+    fn test_simd_best_is_supported() {
+        assert!(Simd::best().is_supported());
+        assert!(Simd::Scalar.is_supported());
+    }
+
+    #[test]
+    fn test_boundaries() {
         let mut state = 0x1234_5678_9abc_def0u64;
         let mut next = || {
             state = state
@@ -932,8 +1036,7 @@ mod tests {
             (state >> 33) as u32
         };
         let runs = RUNS[UnicodeVersion::V15_0_0 as usize];
-        // No rounds without the CPU features.
-        for round in 0..u32::from(supported) * 2_000 {
+        for round in 0..2_000 {
             let offset = next() as usize % (runs.len() - 64);
             let chunk: &[u32; 64] = runs[offset..offset + 64].try_into().expect("64 runs");
             let random = u64::from(next()) | u64::from(next()) << 31 | u64::from(next()) << 62;
@@ -948,17 +1051,18 @@ mod tests {
                 .filter(|idx| edges >> idx & 1 == 1)
                 .map(|idx| (chunk[idx] >> CATEGORY_BITS).max(min_codepoint))
                 .collect();
-            let mut boundaries = [0; 64];
-            // SAFETY: SIMD support is checked above.
-            let count = unsafe { boundaries_simd(chunk, edges, min_codepoint, &mut boundaries) };
-            assert_eq!(&boundaries[..count], expected, "edges={edges:#x}");
+            for simd in supported() {
+                let mut boundaries = [0; 64];
+                // SAFETY: only supported implementations are iterated.
+                let count =
+                    unsafe { simd.boundaries(chunk, edges, min_codepoint, &mut boundaries) };
+                assert_eq!(&boundaries[..count], expected, "{simd:?} edges={edges:#x}");
+            }
         }
     }
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     #[test]
-    fn test_members_simd() {
-        let supported = simd_supported();
+    fn test_members() {
         let mut state = 0x9e37_79b9_7f4a_7c15u64;
         let mut next = || {
             state = state
@@ -967,8 +1071,7 @@ mod tests {
             (state >> 33) as u32
         };
         let runs = RUNS[UnicodeVersion::V15_0_0 as usize];
-        // No rounds without the CPU features.
-        for round in 0..u32::from(supported) * 2_000 {
+        for round in 0..2_000 {
             let offset = next() as usize % (runs.len() - 64);
             let chunk: &[u32; 64] = runs[offset..offset + 64].try_into().expect("64 runs");
             let mask = match round % 4 {
@@ -977,12 +1080,14 @@ mod tests {
                 2 => 1 << (next() % 30),
                 _ => next() & ALL_CATEGORIES,
             };
-            let expected = chunk.iter().rev().fold(0u64, |members, &run| {
-                members << 1 | u64::from(mask >> (run & CATEGORY_MASK) & 1)
+            let expected = chunk.iter().enumerate().fold(0u64, |members, (idx, &run)| {
+                members | u64::from(mask >> (run & CATEGORY_MASK) & 1) << idx
             });
-            // SAFETY: SIMD support is checked above.
-            let members = unsafe { members_simd(chunk, mask) };
-            assert_eq!(members, expected, "mask={mask:#x} offset={offset}");
+            for simd in supported() {
+                // SAFETY: only supported implementations are iterated.
+                let members = unsafe { simd.members(chunk, mask) };
+                assert_eq!(members, expected, "{simd:?} mask={mask:#x} offset={offset}");
+            }
         }
     }
 
@@ -1009,14 +1114,14 @@ mod tests {
     fn test_union_runs() {
         let version = UnicodeVersion::V15_0_0;
         let runs = RUNS[version as usize];
-        // With and without SIMD.
+        // Every implementation this CPU supports.
         let check = |mask: u32, min_codepoint: u32, max_codepoint: u32| {
             let expected = union_reference(version, mask, min_codepoint, max_codepoint);
-            for simd in [false, true] {
+            for simd in supported() {
                 assert_eq!(
                     union_runs(runs, mask, min_codepoint, max_codepoint, simd),
                     expected,
-                    "mask={mask:#x} range=({min_codepoint},{max_codepoint}) simd={simd}"
+                    "mask={mask:#x} range=({min_codepoint},{max_codepoint}) simd={simd:?}"
                 );
             }
         };
