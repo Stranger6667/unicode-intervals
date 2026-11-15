@@ -443,11 +443,15 @@ fn range_mask(min_codepoint: u32, max_codepoint: u32) -> AsciiMask {
     mask
 }
 
+pub(crate) fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
+    extract_intervals_with_capacity(bits, 0)
+}
+
 /// Extract sorted, coalesced intervals from a 256-bit membership mask, a whole run of set
 /// bits at a time (`trailing_zeros` to the run start, `trailing_ones` for its length).
 #[allow(clippy::arithmetic_side_effects)]
-pub(crate) fn extract_intervals(bits: &AsciiMask) -> Vec<Interval> {
-    let mut result = Vec::new();
+pub(crate) fn extract_intervals_with_capacity(bits: &AsciiMask, capacity: usize) -> Vec<Interval> {
+    let mut result = Vec::with_capacity(capacity);
     let mut current: Option<Interval> = None;
     let mut word: u32 = 0;
     while word < 4 {

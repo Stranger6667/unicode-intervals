@@ -1,5 +1,5 @@
 use crate::{
-    query::{extract_intervals, AsciiMask},
+    query::{extract_intervals_with_capacity, AsciiMask},
     Interval,
 };
 
@@ -19,7 +19,7 @@ pub fn from_str(string: &str) -> Vec<Interval> {
             let codepoint = character as u32;
             bits[(codepoint / 64) as usize] |= 1u64 << (codepoint % 64);
         }
-        return extract_intervals(&bits);
+        return extract_intervals_with_capacity(&bits, string.len().min(128));
     }
     let mut intervals: Vec<_> = string.chars().map(|c| (c as u32, c as u32)).collect();
     merge(&mut intervals);
