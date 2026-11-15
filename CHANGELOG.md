@@ -14,6 +14,7 @@
 ### Performance
 
 - `query` with several categories uses NEON on AArch64, making such queries ~2.2-2.6x faster on Apple silicon.
+- `query` with several categories uses AVX-512 where available, making such queries ~10% faster than with AVX2.
 
 ## [0.4.0] - 2026-11-15
 

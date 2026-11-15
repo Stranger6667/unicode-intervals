@@ -2,3 +2,16 @@
 # so its Rust source is excluded from coverage reporting.
 ignore:
   - "crates/unicode-intervals-py"
+  # AVX-512 code only runs on CPUs that have it; most CI runners do not. The `test-avx512`
+  # job covers it under an emulator.
+  - "crates/unicode-intervals/src/avx512.rs"
+
+coverage:
+  status:
+    # The AVX-512 dispatch arms in `query.rs` are hit only on AVX-512 runners.
+    project:
+      default:
+        threshold: 0.5%
+    patch:
+      default:
+        threshold: 5%

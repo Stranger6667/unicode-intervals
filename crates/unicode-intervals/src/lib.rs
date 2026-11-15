@@ -112,6 +112,8 @@ use crate::constants::MAX_CODEPOINT;
 use core::fmt;
 use std::str::FromStr;
 
+#[cfg(target_arch = "x86_64")]
+mod avx512;
 mod categories;
 mod constants;
 mod error;

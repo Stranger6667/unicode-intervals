@@ -62,6 +62,19 @@ jobs:
 
       - run: cargo test --workspace ${{ matrix.exclude-py }} --no-fail-fast --target=${{ matrix.target }}
 
+  test-avx512:
+    name: Tests (AVX-512 under Intel SDE)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: petarpetrovt/setup-sde@v6.0
+      # GitHub-hosted runners rarely have AVX-512: emulate a CPU that does.
+      - run: cargo test -p unicode-intervals
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: ${{ env.SDE_PATH }}/sde64 -future --
+
   test-coverage:
     name: Coverage
     runs-on: ubuntu-24.04
