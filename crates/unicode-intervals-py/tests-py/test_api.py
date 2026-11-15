@@ -4,11 +4,12 @@ import unicode_intervals
 
 
 def test_versions():
-    assert str(unicode_intervals.UnicodeVersion.latest()) == "17.0.0"
+    assert str(unicode_intervals.UnicodeVersion.latest()) == "18.0.0"
+    assert unicode_intervals.UnicodeVersion("18.0.0") == unicode_intervals.UnicodeVersion.V18_0_0
     assert str(unicode_intervals.UnicodeVersion("16.0.0")) == "16.0.0"
     assert unicode_intervals.UnicodeVersion("16.0.0") == unicode_intervals.UnicodeVersion.V16_0_0
     assert unicode_intervals.UnicodeVersion.latest() in unicode_intervals.available_versions
-    assert len(unicode_intervals.available_versions) == 11
+    assert len(unicode_intervals.available_versions) == 12
 
 
 def test_unknown_version():

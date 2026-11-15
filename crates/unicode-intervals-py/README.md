@@ -60,13 +60,13 @@ assert unicode_intervals.as_general_categories(["N"]) == ("Nl", "Nd", "No")
 
 ## Unicode versions
 
-Unicode 9.0.0 through 17.0.0 are bundled; queries default to the latest.
+Unicode 9.0.0 through 18.0.0 are bundled; queries default to the latest.
 
 ```python
 import unicode_intervals
 
-assert len(unicode_intervals.available_versions) == 11
-assert str(unicode_intervals.available_versions[-1]) == "17.0.0"
+assert len(unicode_intervals.available_versions) == 12
+assert str(unicode_intervals.available_versions[-1]) == "18.0.0"
 
 version = unicode_intervals.UnicodeVersion("11.0.0")
 assert unicode_intervals.query(categories=["Lu"], max_codepoint=128, version=version) == ((65, 90),)

@@ -236,9 +236,9 @@ macro_rules! runs {
 }
 
 /// Runs for every bundled version, indexed by `UnicodeVersion as usize`.
-static RUNS: [&[u32]; 11] = runs!(
+static RUNS: [&[u32]; 12] = runs!(
     v9_0_0, v10_0_0, v11_0_0, v12_0_0, v12_1_0, v13_0_0, v14_0_0, v15_0_0, v15_1_0, v16_0_0,
-    v17_0_0
+    v17_0_0, v18_0_0
 );
 
 /// Union of the categories in `mask`, clamped to `[min_codepoint, max_codepoint]`.
@@ -442,7 +442,7 @@ const fn build_ascii_masks(table: &[&[Interval]]) -> [AsciiMask; 30] {
 }
 
 /// ASCII masks for every bundled version, indexed by `UnicodeVersion as usize`.
-const ASCII_MASKS: [[AsciiMask; 30]; 11] = [
+const ASCII_MASKS: [[AsciiMask; 30]; 12] = [
     build_ascii_masks(crate::tables::v9_0_0::BY_NAME),
     build_ascii_masks(crate::tables::v10_0_0::BY_NAME),
     build_ascii_masks(crate::tables::v11_0_0::BY_NAME),
@@ -454,6 +454,7 @@ const ASCII_MASKS: [[AsciiMask; 30]; 11] = [
     build_ascii_masks(crate::tables::v15_1_0::BY_NAME),
     build_ascii_masks(crate::tables::v16_0_0::BY_NAME),
     build_ascii_masks(crate::tables::v17_0_0::BY_NAME),
+    build_ascii_masks(crate::tables::v18_0_0::BY_NAME),
 ];
 
 /// `true` when every character in `s` is below `ASCII_BOUND`.

@@ -91,7 +91,7 @@ assert_eq!(intervals, &[(45, 45), (49, 51), (8233, 8233)])
 
 ## Unicode version support
 
-`unicode-intervals` supports Unicode 9.0.0 - 17.0.0.
+`unicode-intervals` supports Unicode 9.0.0 - 18.0.0.
 
 ## Acknowledgements
 
