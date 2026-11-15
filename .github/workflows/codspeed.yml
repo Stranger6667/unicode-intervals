@@ -9,6 +9,11 @@ on:
   # performance analysis in order to generate initial data.
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Runs on `main` are the baselines pull requests are compared against: let them finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   id-token: write # for OpenID Connect authentication with CodSpeed
